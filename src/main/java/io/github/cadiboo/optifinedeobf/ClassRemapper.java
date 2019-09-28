@@ -4,7 +4,6 @@ import io.github.cadiboo.optifinedeobf.mapping.MappingService;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
@@ -17,10 +16,8 @@ import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_PROTECTED;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
-import static org.objectweb.asm.Opcodes.H_GETFIELD;
-import static org.objectweb.asm.Opcodes.H_GETSTATIC;
-import static org.objectweb.asm.Opcodes.H_PUTFIELD;
-import static org.objectweb.asm.Opcodes.H_PUTSTATIC;
+import static org.objectweb.asm.Opcodes.ASM5;
+import static org.objectweb.asm.Opcodes.H_INVOKEVIRTUAL;
 
 /**
  * @author Cadiboo
@@ -42,7 +39,7 @@ public class ClassRemapper {
 	 */
 	byte[] remapClass(byte[] inputClass) {
 		try {
-			final ClassNode classNode = new ClassNode(Opcodes.ASM5);
+			final ClassNode classNode = new ClassNode(ASM5);
 			final ClassReader classReader = new ClassReader(inputClass);
 			classReader.accept(classNode, 0);
 
@@ -70,31 +67,21 @@ public class ClassRemapper {
 						final MethodInsnNode methodInsn = (MethodInsnNode) insn;
 						methodInsn.name = mapLamdaMethod(classNode.name, methodInsn.name);
 					} else if (insn instanceof InvokeDynamicInsnNode) {
-						final InvokeDynamicInsnNode invokeDynamicInsn = (InvokeDynamicInsnNode) insn;
-						final Object[] bsmArgs = invokeDynamicInsn.bsmArgs;
-						for (int i = 0; i < bsmArgs.length; i++) {
+						final Object[] bsmArgs = ((InvokeDynamicInsnNode) insn).bsmArgs;
+						for (int i = 0; i < bsmArgs.length; ++i) {
 							final Object bsmArg = bsmArgs[i];
 							if (bsmArg instanceof Handle) {
 								Handle handle = (Handle) bsmArg;
-								Handle newHandle = new Handle(
-										handle.getTag(),
-										handle.getOwner(),
-										mapHandleName(handle),
-										handle.getDesc(),
-										handle.isInterface()
-								);
-								bsmArgs[i] = newHandle;
-//								if (handle.getName().contains("null")) {
-//									System.out.println(handle);
-//								}
-//								System.out.println(handle.getName() + "->" + newHandle.getName());
+								String mappedName = mapHandleName(handle);
+								if (!mappedName.equals(handle.getName()))
+									bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner(), mappedName, handle.getDesc(), handle.isInterface());
 							}
 						}
 					}
 				});
 			}
 
-			final ClassWriter classWriter = new ClassWriter(Opcodes.ASM5);
+			final ClassWriter classWriter = new ClassWriter(ASM5);
 			classNode.accept(classWriter);
 			return classWriter.toByteArray();
 		} catch (Exception e) {
@@ -102,7 +89,7 @@ public class ClassRemapper {
 		}
 	}
 
-	private int correctAccess(int access) {
+	int correctAccess(int access) {
 		if (makePublic) {
 			// Remove all access (mask it away)
 			access &= ~(ACC_PUBLIC | ACC_PROTECTED | ACC_PRIVATE);
@@ -116,11 +103,11 @@ public class ClassRemapper {
 		return access;
 	}
 
-	private String mapHandleName(final Handle handle) {
+	String mapHandleName(final Handle handle) {
 		int tag = handle.getTag();
 //		Fields: H_GETFIELD H_GETSTATIC H_PUTFIELD H_PUTSTATIC
 //		Methods: H_INVOKEVIRTUAL H_INVOKESTATIC H_INVOKESPECIAL H_NEWINVOKESPECIAL H_INVOKEINTERFACE
-		if (tag == H_GETFIELD || tag == H_GETSTATIC || tag == H_PUTFIELD || tag == H_PUTSTATIC)
+		if (tag < H_INVOKEVIRTUAL) // Field
 			return mappingService.mapField(handle.getOwner(), handle.getName());
 		else {
 			return mapLamdaMethod(handle.getOwner(), handle.getName());
@@ -130,14 +117,11 @@ public class ClassRemapper {
 	/**
 	 * Remaps lambda method names like `lambda$func_1111$0` to `lambda$mappedName$0`
 	 */
-	private String mapLamdaMethod(final String owner, final String name) {
+	String mapLamdaMethod(final String owner, final String name) {
 		if (name.startsWith("lambda$")) { // Handle nested lamdbas
-			final String[] split = name.split("\\$");
-			// Shouldn't need to remap every part, but be safe
-			for (int j = 0; j < split.length; j++) {
-				split[j] = mappingService.mapMethod(owner, split[j]);
-			}
-			return String.join("$", split);
+			int start$ = name.indexOf('$') + 1;
+			int last$ = name.lastIndexOf('$');
+			return name.substring(0, start$) + mappingService.mapMethod(owner, name.substring(start$, last$)) + name.substring(last$);
 		} else
 			return mappingService.mapMethod(owner, name);
 	}

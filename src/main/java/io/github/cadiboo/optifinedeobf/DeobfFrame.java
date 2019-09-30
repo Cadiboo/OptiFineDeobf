@@ -2,6 +2,7 @@ package io.github.cadiboo.optifinedeobf;
 
 import io.github.cadiboo.optifinedeobf.mapping.MappingService;
 import io.github.cadiboo.optifinedeobf.mapping.SRG2MCP;
+import org.objectweb.asm.ClassReader;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -24,6 +25,11 @@ import java.awt.HeadlessException;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetDropEvent;
+import java.awt.event.ItemEvent;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -34,6 +40,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
+import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
@@ -42,10 +49,12 @@ public class DeobfFrame extends JFrame {
 
 	private final JTextField inputFileTextField;
 	private final JTextField outputFileTextField;
+	private final JProgressBar progressBar;
+	private final JLabel progressLabel;
 	private final JCheckBox makePublicCheckbox;
 	private final JCheckBox definaliseCheckbox;
+	private final JCheckBox remapFileNamesCheckbox;
 	private final JCheckBox makeForgeDevJarCheckbox;
-	private final JProgressBar progressBar;
 
 	private MappingService mappingService = null;
 	private ClassRemapper classRemapper = null;
@@ -53,12 +62,12 @@ public class DeobfFrame extends JFrame {
 	private DeobfFrame() throws HeadlessException {
 
 		this.setName("DeobfFrame");
-		this.setSize(404, 236);
+		this.setSize(400, 300);
 		this.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		this.setResizable(true);
 		this.setTitle("OptiFine Deobfuscator");
 
-		JLabel title = new JLabel();
+		final JLabel title = new JLabel();
 		title.setName("title");
 		title.setBounds(2, 5, 385, 42);
 		title.setFont(new Font("Dialog", Font.BOLD, 18));
@@ -66,7 +75,7 @@ public class DeobfFrame extends JFrame {
 		title.setPreferredSize(new Dimension(385, 42));
 		title.setText("OptiFine Deobfuscator");
 
-		JLabel description = new JLabel();
+		final JLabel description = new JLabel();
 		description.setName("description");
 		description.setBounds(2, 30, 385, 42);
 		description.setFont(new Font("Dialog", Font.PLAIN, 12));
@@ -80,11 +89,26 @@ public class DeobfFrame extends JFrame {
 		inputFileLabel.setPreferredSize(new Dimension(75, 16));
 		inputFileLabel.setText("Input File");
 
-		this.inputFileTextField = new JTextField();
-		this.inputFileTextField.setName("inputFileTextField");
-		this.inputFileTextField.setBounds(90, 75, 210, 20);
-		this.inputFileTextField.setEditable(false);
-		this.inputFileTextField.setPreferredSize(new Dimension(210, 20));
+		final DropTarget inputDropTarget = new DropTarget() {
+			public synchronized void drop(DropTargetDropEvent evt) {
+				try {
+					evt.acceptDrop(DnDConstants.ACTION_COPY);
+					for (File file : (List<File>) evt.getTransferable().getTransferData(DataFlavor.javaFileListFlavor)) {
+						setInputFile(file);
+					}
+					evt.dropComplete(true);
+				} catch (Exception e) {
+					handleException(e);
+				}
+			}
+		};
+
+		inputFileTextField = new JTextField();
+		inputFileTextField.setName("inputFileTextField");
+		inputFileTextField.setBounds(90, 75, 210, 20);
+		inputFileTextField.setEditable(false);
+		inputFileTextField.setPreferredSize(new Dimension(210, 20));
+		inputFileTextField.setDropTarget(inputDropTarget);
 
 		final JButton inputFileButton = new JButton();
 		inputFileButton.setName("inputFileButton");
@@ -93,6 +117,7 @@ public class DeobfFrame extends JFrame {
 		inputFileButton.setPreferredSize(new Dimension(75, 20));
 		inputFileButton.setText("Choose...");
 		inputFileButton.addActionListener(e -> this.chooseInputFile());
+		inputFileButton.setDropTarget(inputDropTarget);
 
 		final JLabel outputFileLabel = new JLabel();
 		outputFileLabel.setName("outputFileLabel");
@@ -100,11 +125,11 @@ public class DeobfFrame extends JFrame {
 		outputFileLabel.setPreferredSize(new Dimension(75, 16));
 		outputFileLabel.setText("Output File");
 
-		this.outputFileTextField = new JTextField();
-		this.outputFileTextField.setName("outputFileTextField");
-		this.outputFileTextField.setBounds(90, 100, 210, 20);
-		this.outputFileTextField.setEditable(true);
-		this.outputFileTextField.setPreferredSize(new Dimension(210, 20));
+		outputFileTextField = new JTextField();
+		outputFileTextField.setName("outputFileTextField");
+		outputFileTextField.setBounds(90, 100, 210, 20);
+		outputFileTextField.setEditable(true);
+		outputFileTextField.setPreferredSize(new Dimension(210, 20));
 
 		final JButton outputFileButton = new JButton();
 		outputFileButton.setName("outputFileButton");
@@ -114,34 +139,52 @@ public class DeobfFrame extends JFrame {
 		outputFileButton.setText("Choose...");
 		outputFileButton.addActionListener(e -> this.chooseOutputFile());
 
-		this.progressBar = new JProgressBar();
-		this.progressBar.setMinimum(0);
-		this.progressBar.setMaximum(1);
-		this.progressBar.setValue(1);
-		this.progressBar.setBounds(15, 130, 360, 10);
-		this.progressBar.setVisible(false);
+		progressBar = new JProgressBar();
+		progressBar.setMinimum(0);
+		progressBar.setMaximum(1);
+		progressBar.setValue(1);
+		progressBar.setBounds(15, 145, 360, 10);
+		progressBar.setVisible(false);
 
-		this.makePublicCheckbox = new JCheckBox();
-		this.makePublicCheckbox.setName("makePublicCheckbox");
-		this.makePublicCheckbox.setBounds(80, 100, 200, 20);
-		this.makePublicCheckbox.setText("Public");
-		this.makePublicCheckbox.setToolTipText("If classes, fields and methods should have their access escalated to public. Similar to an access transformer");
+		progressLabel = new JLabel();
+		progressLabel.setName("progressLabel");
+		progressLabel.setBounds(15, 155, 360, 50);
+		progressLabel.setFont(new Font("Dialog", Font.PLAIN, 12));
+		progressLabel.setHorizontalAlignment(SwingConstants.CENTER);
+		progressLabel.setPreferredSize(new Dimension(360, 50));
 
-		this.definaliseCheckbox = new JCheckBox();
-		this.definaliseCheckbox.setName("definaliseCheckbox");
-		this.definaliseCheckbox.setBounds(80, 100, 200, 20);
-		this.definaliseCheckbox.setText("Definalise");
-		this.definaliseCheckbox.setToolTipText("If classes, fields and methods should have their access definalised. Similar to an access transformer");
+		makePublicCheckbox = new JCheckBox();
+		makePublicCheckbox.setName("makePublicCheckbox");
+		makePublicCheckbox.setBounds(0, 0, 200, 20);
+		makePublicCheckbox.setText("Make Public");
+		makePublicCheckbox.setToolTipText("If classes, fields and methods should have their access escalated to public. Similar to an access transformer");
 
-		this.makeForgeDevJarCheckbox = new JCheckBox();
-		this.makeForgeDevJarCheckbox.setName("makeForgeDevJarCheckbox");
-		this.makeForgeDevJarCheckbox.setBounds(90, 100, 200, 20);
-		this.makeForgeDevJarCheckbox.setText("Forge Dev");
-		this.makeForgeDevJarCheckbox.setToolTipText("If OptiFine should have some tweaks applied to make it a valid for use in a Forge mod development workspace");
+		definaliseCheckbox = new JCheckBox();
+		definaliseCheckbox.setName("definaliseCheckbox");
+		definaliseCheckbox.setBounds(0, 0, 200, 20);
+		definaliseCheckbox.setText("Definalise");
+		definaliseCheckbox.setToolTipText("If classes, fields and methods should have their access definalised. Similar to an access transformer");
+
+		remapFileNamesCheckbox = new JCheckBox();
+		remapFileNamesCheckbox.setName("remapFileNamesCheckbox");
+		remapFileNamesCheckbox.setBounds(0, 0, 200, 20);
+		remapFileNamesCheckbox.setText("Remap file names");
+		remapFileNamesCheckbox.setToolTipText("If class files should be saved under their remapped name");
+
+		makeForgeDevJarCheckbox = new JCheckBox();
+		makeForgeDevJarCheckbox.setName("makeForgeDevJarCheckbox");
+		makeForgeDevJarCheckbox.setBounds(0, 0, 200, 20);
+		makeForgeDevJarCheckbox.setText("Forge Dev Jar");
+		makeForgeDevJarCheckbox.setToolTipText("If OptiFine should have some tweaks applied to make it a valid for use in a Forge mod development workspace");
+		makeForgeDevJarCheckbox.addItemListener(e -> {
+			if (e.getStateChange() == ItemEvent.SELECTED) {
+				this.remapFileNamesCheckbox.setSelected(false);
+			}
+		});
 
 		final JButton deobfButton = new JButton();
 		deobfButton.setName("deobfButton");
-		deobfButton.setBounds(349, 10, 0, 0);
+		deobfButton.setBounds(350, 10, 0, 0);
 		deobfButton.setMargin(new Insets(2, 2, 2, 2));
 		deobfButton.setPreferredSize(new Dimension(50, 20));
 		deobfButton.setText("Deobf");
@@ -161,26 +204,28 @@ public class DeobfFrame extends JFrame {
 		final JPanel bottomPannel = new JPanel();
 		bottomPannel.setName("bottomPannel");
 		bottomPannel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 10));
-		bottomPannel.setPreferredSize(new Dimension(390, 55));
+		bottomPannel.setPreferredSize(new Dimension(400, 100));
 
 		final JPanel contentPanel = new JPanel();
 		contentPanel.setName("contentPanel");
 		contentPanel.setLayout(new BorderLayout(5, 5));
-		contentPanel.setPreferredSize(new Dimension(394, 203));
+		contentPanel.setPreferredSize(new Dimension(400, 300));
 
 		{
 			centerPannel.add(title, title.getName());
 			centerPannel.add(description, description.getName());
 			centerPannel.add(inputFileLabel, inputFileLabel.getName());
-			centerPannel.add(this.inputFileTextField, this.inputFileTextField.getName());
+			centerPannel.add(inputFileTextField, inputFileTextField.getName());
 			centerPannel.add(inputFileButton, inputFileButton.getName());
 			centerPannel.add(outputFileLabel, outputFileLabel.getName());
-			centerPannel.add(this.outputFileTextField, this.outputFileTextField.getName());
+			centerPannel.add(outputFileTextField, outputFileTextField.getName());
 			centerPannel.add(outputFileButton, outputFileButton.getName());
-			centerPannel.add(this.progressBar, this.progressBar.getName());
+			centerPannel.add(progressBar, progressBar.getName());
+			centerPannel.add(progressLabel, progressLabel.getName());
 
 			bottomPannel.add(makePublicCheckbox, makePublicCheckbox.getName());
 			bottomPannel.add(definaliseCheckbox, definaliseCheckbox.getName());
+			bottomPannel.add(remapFileNamesCheckbox, remapFileNamesCheckbox.getName());
 			bottomPannel.add(makeForgeDevJarCheckbox, makeForgeDevJarCheckbox.getName());
 			bottomPannel.add(deobfButton, deobfButton.getName());
 
@@ -228,18 +273,31 @@ public class DeobfFrame extends JFrame {
 		return baos.toByteArray();
 	}
 
-	private void deobf() {
+	public static String replaceLast(String text, String regex, String replacement) {
+		return text.replaceFirst("(?s)(.*)" + regex, "$1" + replacement);
+	}
 
-		final boolean makeForgeDevJar = makeForgeDevJarCheckbox.isSelected();
+	public void handleException(final Exception e) {
+		e.printStackTrace();
+		progressLabel.setText("Error: " + e.getLocalizedMessage());
+	}
+
+	private void deobf() {
 
 		Path inputPath = Paths.get(this.inputFileTextField.getText());
 		File inputFile = inputPath.toFile();
 		if (!inputFile.exists()) {
+			this.progressLabel.setText("Please select an input file.");
 			return;
 		}
-		File outputFile = Paths.get(this.outputFileTextField.getText()).toFile();
+
+		Path outputPath = Paths.get(this.outputFileTextField.getText());
+		File outputFile = outputPath.toFile();
 		if (outputFile.exists()) {
-			outputFile.delete();
+			if (!outputFile.delete()) {
+				this.progressLabel.setText("Failed to delete pre-existing output file. Either delete it manually or choose a different output path.");
+				return;
+			}
 		}
 
 		if (mappingService == null)
@@ -248,88 +306,100 @@ public class DeobfFrame extends JFrame {
 			classRemapper = new ClassRemapper(mappingService, makePublicCheckbox.isSelected(), definaliseCheckbox.isSelected());
 
 		try {
-			if (inputFile.getName().endsWith(".jar")) {
-				HashSet<String> filesToIngore = new HashSet<>();
-				int filesToProcess = 0;
-				try (JarInputStream jarInputStream = new JarInputStream(new FileInputStream(inputFile), false)) {
-					JarEntry jarEntry;
-					while ((jarEntry = jarInputStream.getNextJarEntry()) != null) {
-						String jarEntryName = jarEntry.getName();
-						++filesToProcess;
-						if (makeForgeDevJar) {
-							// Discard Forge dummy classes
-							if (jarEntryName.startsWith("net/minecraftforge/"))
-								filesToIngore.add(jarEntryName);
-							// Discard Javax dummy class
-							if (jarEntryName.startsWith("javax/"))
-								filesToIngore.add(jarEntryName);
-							// Discard notch named classes
-							if (!jarEntryName.equals("Config.class") && jarEntryName.endsWith(".class") && !jarEntryName.contains("/"))
-								filesToIngore.add(jarEntryName);
-							// Mark notch-named classes with SRG counterparts as ignored so we don't try and add them to the zip twice
-							if (jarEntryName.startsWith("srg/"))
-								filesToIngore.add(jarEntryName.replaceFirst("srg/", ""));
-						}
-					}
-				}
+			String inputFileName = inputFile.getName();
+			if (inputFileName.endsWith(".jar"))
+				remapJar(inputFile, outputFile);
+			else if (inputFileName.endsWith(".class"))
+				remapClass(inputPath, outputPath);
+			else
+				this.progressLabel.setText("Input file is not a jar or class file! Please select a valid input file.");
+			this.progressLabel.setText("Successfully remapped file " + inputFileName);
+		} catch (IOException e) {
+			handleException(e);
+		}
 
-				this.progressBar.setMaximum(filesToProcess);
+	}
 
-				try (
-						JarInputStream jarInputStream = new JarInputStream(new FileInputStream(inputFile), false);
-						JarOutputStream jarOutputStream = new JarOutputStream(new FileOutputStream(outputFile))
-				) {
-					JarEntry jarEntry;
-					while ((jarEntry = jarInputStream.getNextJarEntry()) != null) {
-						String jarEntryName = jarEntry.getName();
+	private void remapClass(final Path inputPath, final Path outputPath) throws IOException {
+		byte[] remappedBytes = classRemapper.remapClass(Files.readAllBytes(inputPath));
+		if (remappedBytes != null)
+			Files.write(outputPath, remappedBytes);
+	}
 
-						this.progressBar.setValue(this.progressBar.getValue() + 1);
-						this.progressBar.setToolTipText("Processing " + jarEntryName);
+	private void remapJar(final File inputFile, final File outputFile) throws IOException {
 
-						if (filesToIngore.contains(jarEntryName))
-							continue;
-						if (jarEntryName.endsWith(".class")) {
-							byte[] remappedBytes = classRemapper.remapClass(readStreamFully(jarInputStream));
-							if (remappedBytes != null) {
-								jarOutputStream.putNextEntry(new JarEntry(jarEntryName));
-								jarOutputStream.write(remappedBytes);
-								jarOutputStream.closeEntry();
-								if (makeForgeDevJar && jarEntryName.startsWith("srg/")) {
-									// Duplicate srg named classes and overwrite their notch named counterparts
-									jarOutputStream.putNextEntry(new JarEntry(jarEntryName.replaceFirst("srg/", "")));
-									jarOutputStream.write(remappedBytes);
-									jarOutputStream.closeEntry();
-								}
-							}
-						} else {
-							jarOutputStream.putNextEntry(new JarEntry(jarEntry));
-							jarOutputStream.write(readStreamFully(jarInputStream));
+		final boolean makeForgeDevJar = makeForgeDevJarCheckbox.isSelected();
+		final boolean remapFileNames = remapFileNamesCheckbox.isSelected();
+
+		HashSet<String> filesToIngore = new HashSet<>();
+		final int filesToProcess = getFilesToProcess(inputFile, filesToIngore);
+
+		this.progressBar.setMaximum(filesToProcess);
+
+		try (
+				JarInputStream jarInputStream = new JarInputStream(new FileInputStream(inputFile), false);
+				JarOutputStream jarOutputStream = new JarOutputStream(new FileOutputStream(outputFile))
+		) {
+			JarEntry jarEntry;
+			while ((jarEntry = jarInputStream.getNextJarEntry()) != null) {
+				String jarEntryName = jarEntry.getName();
+
+				this.progressBar.setValue(this.progressBar.getValue() + 1);
+				this.progressBar.setToolTipText("Processing " + jarEntryName);
+
+				if (filesToIngore.contains(jarEntryName))
+					continue;
+
+				if (jarEntryName.endsWith(".class")) {
+					byte[] remappedBytes = classRemapper.remapClass(readStreamFully(jarInputStream));
+					if (remappedBytes != null) {
+						if (remapFileNames) jarOutputStream.putNextEntry(new JarEntry(new ClassReader(remappedBytes).getClassName() + ".class"));
+						else jarOutputStream.putNextEntry(new JarEntry(jarEntryName));
+						jarOutputStream.write(remappedBytes);
+						jarOutputStream.closeEntry();
+
+						if (makeForgeDevJar && jarEntryName.startsWith("srg/")) {
+							// Duplicate srg named classes and overwrite their obf named counterparts
+							jarOutputStream.putNextEntry(new JarEntry(jarEntryName.substring(4)));
+							jarOutputStream.write(remappedBytes);
 							jarOutputStream.closeEntry();
 						}
 					}
-					jarOutputStream.flush();
+				} else {
+					jarOutputStream.putNextEntry(new JarEntry(jarEntry));
+					jarOutputStream.write(readStreamFully(jarInputStream));
+					jarOutputStream.closeEntry();
 				}
-
-				this.progressBar.setMaximum(1);
-				this.progressBar.setValue(1);
-				this.progressBar.setToolTipText(null);
-			} else if (inputFile.getName().endsWith(".class")) {
-				this.progressBar.setMaximum(1);
-				this.progressBar.setToolTipText("Processing " + inputFile.getName());
-
-				byte[] remappedBytes = classRemapper.remapClass(Files.readAllBytes(inputPath));
-				if (remappedBytes != null)
-					Files.write(Paths.get(this.outputFileTextField.getText()), remappedBytes);
-
-				this.progressBar.setValue(1);
-				this.progressBar.setToolTipText(null);
-			} else {
-				throw new IllegalStateException();
 			}
-		} catch (IOException e) {
-			e.printStackTrace();
+			jarOutputStream.flush();
 		}
 
+		this.progressBar.setMaximum(1);
+		this.progressBar.setValue(1);
+		this.progressBar.setToolTipText(null);
+	}
+
+	private int getFilesToProcess(final File inputFile, final HashSet<String> filesToIngore) throws IOException {
+		final boolean makeForgeDevJar = makeForgeDevJarCheckbox.isSelected();
+
+		int filesToProcess = 0;
+		try (JarInputStream jarInputStream = new JarInputStream(new FileInputStream(inputFile), false)) {
+			JarEntry jarEntry;
+			while ((jarEntry = jarInputStream.getNextJarEntry()) != null) {
+				++filesToProcess;
+				String jarEntryName = jarEntry.getName();
+				if (makeForgeDevJar) {
+					if (jarEntryName.startsWith("net/minecraftforge/") // Discard Forge dummy classes
+							|| jarEntryName.startsWith("javax/") // Discard Javax dummy class
+							|| (!jarEntryName.equals("Config.class") && jarEntryName.endsWith(".class") && !jarEntryName.contains("/")) // Discard obf named classes
+					)
+						filesToIngore.add(jarEntryName);
+					else if (jarEntryName.startsWith("srg/")) // Mark obf-named classes with SRG counterparts as ignored so we don't try and add them to the zip twice
+						filesToIngore.add(jarEntryName.substring(4));
+				}
+			}
+		}
+		return filesToProcess;
 	}
 
 	private JFileChooser makeInputChooser() {
@@ -357,9 +427,21 @@ public class DeobfFrame extends JFrame {
 		JFileChooser chooser = makeInputChooser();
 		if (chooser.showOpenDialog(this) == 0) {
 			File file = chooser.getSelectedFile();
-			this.inputFileTextField.setText(file.getPath());
-			this.outputFileTextField.setText(file.getParent() + File.separator + "deobf_" + file.getName());
+			setInputFile(file);
 		}
+	}
+
+	private void setInputFile(final File file) {
+		String fileName = file.getName();
+		if (fileName.endsWith(".jar"))
+			this.outputFileTextField.setText(file.getParent() + File.separator + replaceLast(fileName, ".jar", "-deobf.jar"));
+		else if (fileName.endsWith(".class"))
+			this.outputFileTextField.setText(file.getParent() + File.separator + replaceLast(fileName, ".class", "-deobf.class"));
+		else {
+			handleException(new IllegalStateException("Input file is not a jar or class file! Please select a valid input file."));
+			return;
+		}
+		this.inputFileTextField.setText(file.getPath());
 	}
 
 	private void chooseOutputFile() {

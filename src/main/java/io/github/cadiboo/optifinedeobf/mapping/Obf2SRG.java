@@ -26,7 +26,7 @@ public class Obf2SRG implements MappingService {
 					// Method line
 					// func_176742_j ()Ljava/lang/String; getName2
 					final String[] s = line.trim().split(" ");
-					clazz.methods.put(s[0], s[2]);
+					clazz.methods.computeIfAbsent(s[0], k -> new HashMap<>()).put(s[1], s[2]);
 				} else {
 					// Field line
 					// field_82609_l BY_INDEX
@@ -43,22 +43,22 @@ public class Obf2SRG implements MappingService {
 			String mappedClassName = mappedClass.mappedName;
 			System.out.println(rawClass + " -> " + mappedClassName);
 			mappedClass.fields.forEach((raw, mapped) -> System.out.println(rawClass + "." + raw + " -> " + mappedClassName + "." + mapped));
-			mappedClass.methods.forEach((raw, mapped) -> System.out.println(rawClass + "." + raw + " -> " + mappedClassName + "." + mapped));
+			mappedClass.methods.forEach((raw, descMap) -> descMap.forEach((desc, mapped) -> System.out.println(rawClass + "." + raw + " -> " + mappedClassName + "." + mapped + desc)));
 		});
 	}
 
 	@Override
-	public String mapClass(final String name) {
-		TSRGClass mapped = classes.get(name);
+	public String mapClass(final String clazz) {
+		TSRGClass mapped = classes.get(clazz);
 		if (mapped != null) {
 			return mapped.mappedName;
 		}
-		return name;
+		return clazz;
 	}
 
 	@Override
-	public String mapField(String className, String name) {
-		TSRGClass mapped = classes.get(name);
+	public String mapField(String clazz, String name) {
+		TSRGClass mapped = classes.get(clazz);
 		if (mapped != null) {
 			return mapped.fields.getOrDefault(name, name);
 		}
@@ -66,10 +66,13 @@ public class Obf2SRG implements MappingService {
 	}
 
 	@Override
-	public String mapMethod(String className, String name) {
-		TSRGClass mapped = classes.get(name);
+	public String mapMethod(String clazz, String name, String desc) {
+		TSRGClass mapped = classes.get(clazz);
 		if (mapped != null) {
-			return mapped.methods.getOrDefault(name, name);
+			HashMap<String, String> map = mapped.methods.get(name);
+			if (map == null)
+				return name;
+			return map.getOrDefault(desc, name);
 		}
 		return name;
 	}
@@ -77,8 +80,10 @@ public class Obf2SRG implements MappingService {
 	private class TSRGClass {
 
 		private final String mappedName;
+		// unmapedName -> mappedName
 		private final HashMap<String, String> fields = new HashMap<>();
-		private final HashMap<String, String> methods = new HashMap<>();
+		// unmapedName -> descriptor -> mappedName
+		private final HashMap<String, HashMap<String, String>> methods = new HashMap<>();
 
 		private TSRGClass(final String mappedName) {
 			this.mappedName = mappedName;

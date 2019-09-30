@@ -58,14 +58,14 @@ public class ClassRemapper {
 			for (final MethodNode method : classNode.methods) {
 				if ((makePublic || definalise) && !method.name.equals("<clinit>"))
 					method.access = correctAccess(method.access);
-				method.name = mapLamdaMethod(classNode.name, method.name);
+				method.name = mapLamdaMethod(classNode.name, method.name, method.desc);
 				method.instructions.iterator().forEachRemaining(insn -> {
 					if (insn instanceof FieldInsnNode) {
 						final FieldInsnNode fieldInsn = (FieldInsnNode) insn;
 						fieldInsn.name = mappingService.mapField(classNode.name, fieldInsn.name);
 					} else if (insn instanceof MethodInsnNode) {
 						final MethodInsnNode methodInsn = (MethodInsnNode) insn;
-						methodInsn.name = mapLamdaMethod(classNode.name, methodInsn.name);
+						methodInsn.name = mapLamdaMethod(classNode.name, methodInsn.name, methodInsn.desc);
 					} else if (insn instanceof InvokeDynamicInsnNode) {
 						final Object[] bsmArgs = ((InvokeDynamicInsnNode) insn).bsmArgs;
 						for (int i = 0; i < bsmArgs.length; ++i) {
@@ -110,20 +110,20 @@ public class ClassRemapper {
 		if (tag < H_INVOKEVIRTUAL) // Field
 			return mappingService.mapField(handle.getOwner(), handle.getName());
 		else {
-			return mapLamdaMethod(handle.getOwner(), handle.getName());
+			return mapLamdaMethod(handle.getOwner(), handle.getName(), handle.getDesc());
 		}
 	}
 
 	/**
 	 * Remaps lambda method names like `lambda$func_1111$0` to `lambda$mappedName$0`
 	 */
-	String mapLamdaMethod(final String owner, final String name) {
+	String mapLamdaMethod(final String owner, final String name, final String desc) {
 		if (name.startsWith("lambda$")) { // Handle nested lamdbas
 			int start$ = name.indexOf('$') + 1;
 			int last$ = name.lastIndexOf('$');
-			return name.substring(0, start$) + mappingService.mapMethod(owner, name.substring(start$, last$)) + name.substring(last$);
+			return name.substring(0, start$) + mappingService.mapMethod(owner, name.substring(start$, last$), desc) + name.substring(last$);
 		} else
-			return mappingService.mapMethod(owner, name);
+			return mappingService.mapMethod(owner, name, desc);
 	}
 
 }

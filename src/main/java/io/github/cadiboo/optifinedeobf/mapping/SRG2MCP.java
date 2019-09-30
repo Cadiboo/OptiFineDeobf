@@ -40,17 +40,17 @@ public class SRG2MCP implements MappingService {
 	}
 
 	@Override
-	public String mapClass(final String name) {
-		return name;
+	public String mapClass(final String clazz) {
+		return clazz;
 	}
 
 	@Override
-	public String mapField(String className, String name) {
+	public String mapField(String clazz, String name) {
 		return fields.getOrDefault(name, name);
 	}
 
 	@Override
-	public String mapMethod(String className, String name) {
+	public String mapMethod(String clazz, String name, String desc) {
 		return methods.getOrDefault(name, name);
 	}
 

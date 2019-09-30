@@ -242,9 +242,10 @@ public class DeobfFrame extends JFrame {
 			outputFile.delete();
 		}
 
-		if (mappingService == null) mappingService = new SRG2MCP();
-//		if (classRemapper == null) // TODO: Only (re)init if configs have changed
-		classRemapper = new ClassRemapper(mappingService, makePublicCheckbox.isSelected(), definaliseCheckbox.isSelected());
+		if (mappingService == null)
+			mappingService = new SRG2MCP();
+		if (classRemapper == null || (classRemapper.mappingService != mappingService || classRemapper.makePublic != makePublicCheckbox.isSelected() || classRemapper.definalise != definaliseCheckbox.isSelected()))
+			classRemapper = new ClassRemapper(mappingService, makePublicCheckbox.isSelected(), definaliseCheckbox.isSelected());
 
 		try {
 			if (inputFile.getName().endsWith(".jar")) {

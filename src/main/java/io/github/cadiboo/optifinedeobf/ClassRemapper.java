@@ -24,9 +24,9 @@ import static org.objectweb.asm.Opcodes.H_INVOKEVIRTUAL;
  */
 public class ClassRemapper {
 
-	private final MappingService mappingService;
-	private final boolean makePublic;
-	private final boolean definalise;
+	public final MappingService mappingService;
+	public final boolean makePublic;
+	public final boolean definalise;
 
 	ClassRemapper(final MappingService mappingService, final boolean makePublic, final boolean definalise) {
 		this.mappingService = mappingService;

@@ -10,6 +10,8 @@ public class Obf2MCP implements MappingService {
 
 	@Override
 	public void dump() {
+		obf2SRG.dump();
+		srg2MCP.dump();
 	}
 
 	@Override

@@ -37,12 +37,12 @@ public class ClassRemapperTest {
 	public static void main(String... args) {
 
 		ClassRemapper classRemapper = new ClassRemapper(new TestMappingService(), true, true);
-		System.out.println(classRemapper.mapLamdaMethod("", "lambda$func_1112$0"));
-		System.out.println(classRemapper.mapLamdaMethod("", "lambda$func_1111$0"));
-		System.out.println(classRemapper.mapHandleName(new Handle(H_GETFIELD, "", "field_1112", "", false)));
-		System.out.println(classRemapper.mapHandleName(new Handle(H_GETFIELD, "", "field_1111", "", false)));
-		System.out.println(classRemapper.mapHandleName(new Handle(H_INVOKEVIRTUAL, "", "lambda$func_1112$0", "", false)));
-		System.out.println(classRemapper.mapHandleName(new Handle(H_INVOKEVIRTUAL, "", "lambda$func_1111$0", "", false)));
+		System.out.println(classRemapper.mapLamdaMethod("", "lambda$func_1112$0", "()V"));
+		System.out.println(classRemapper.mapLamdaMethod("", "lambda$func_1111$0", "()V"));
+		System.out.println(classRemapper.mapHandleName(new Handle(H_GETFIELD, "", "field_1112", "D", false)));
+		System.out.println(classRemapper.mapHandleName(new Handle(H_GETFIELD, "", "field_1111", "D", false)));
+		System.out.println(classRemapper.mapHandleName(new Handle(H_INVOKEVIRTUAL, "", "lambda$func_1112$0", "()V", false)));
+		System.out.println(classRemapper.mapHandleName(new Handle(H_INVOKEVIRTUAL, "", "lambda$func_1111$0", "()V", false)));
 
 		ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
 		cw.visit(V1_8, ACC_PUBLIC | ACC_SUPER, "testing/Dummy", null, "java/lang/Object", new String[0]);
@@ -123,19 +123,19 @@ public class ClassRemapperTest {
 		}
 
 		@Override
-		public String mapClass(final String name) {
-			return name;
+		public String mapClass(final String clazz) {
+			return clazz;
 		}
 
 		@Override
-		public String mapField(final String className, final String name) {
+		public String mapField(final String clazz, final String name) {
 			if (name.equals("field_1111"))
 				return "mappedField";
 			return name;
 		}
 
 		@Override
-		public String mapMethod(final String className, final String name) {
+		public String mapMethod(final String clazz, final String name, final String desc) {
 			if (name.equals("func_1111"))
 				return "mappedMethod";
 			else if (name.equals("func_213165_a"))

@@ -77,6 +77,11 @@ public class Obf2SRG implements MappingService {
 		return name;
 	}
 
+	@Override
+	public boolean needsClassNameRemapping() {
+		return true;
+	}
+
 	private class TSRGClass {
 
 		private final String mappedName;

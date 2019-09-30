@@ -26,12 +26,17 @@ public class Obf2MCP implements MappingService {
 
 	@Override
 	public String mapMethod(String clazz, String name, String desc) {
-		return srg2MCP.mapMethod(obf2SRG.mapClass(clazz), obf2SRG.mapMethod(clazz, name, desc), mapDesc(desc));
+		return srg2MCP.mapMethod(obf2SRG.mapClass(clazz), obf2SRG.mapMethod(clazz, name, desc), mapMethodDescriptor(desc));
 	}
 
 	@Override
 	public String mapTypeClass(final String clazz) {
 		return obf2SRG.mapClass(clazz);
+	}
+
+	@Override
+	public boolean needsClassNameRemapping() {
+		return true;
 	}
 
 }

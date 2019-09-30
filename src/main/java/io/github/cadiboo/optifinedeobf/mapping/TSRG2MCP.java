@@ -56,4 +56,9 @@ public class TSRG2MCP implements MappingService {
 		return methods.getOrDefault(name, name);
 	}
 
+	@Override
+	public boolean needsClassNameRemapping() {
+		return false;
+	}
+
 }

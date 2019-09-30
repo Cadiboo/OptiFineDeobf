@@ -53,7 +53,7 @@ public class MappingServiceTest {
 			for (final Field field : fields)
 				System.out.println("Field: " + field + " -> " + service.mapClass(field.owner) + "." + service.mapField(field.owner, field.name));
 			for (final Method method : methods)
-				System.out.println("Method: " + method + " -> " + service.mapClass(method.owner) + "." + service.mapMethod(method.owner, method.name, method.desc) + service.mapDesc(method.desc));
+				System.out.println("Method: " + method + " -> " + service.mapClass(method.owner) + "." + service.mapMethod(method.owner, method.name, method.desc) + service.mapMethodDescriptor(method.desc));
 		}
 
 	}

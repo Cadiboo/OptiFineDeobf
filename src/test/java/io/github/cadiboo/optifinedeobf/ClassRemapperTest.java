@@ -143,6 +143,11 @@ public class ClassRemapperTest {
 			return name;
 		}
 
+		@Override
+		public boolean needsClassNameRemapping() {
+			return false;
+		}
+
 	}
 
 }

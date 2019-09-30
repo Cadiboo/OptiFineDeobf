@@ -1,16 +1,19 @@
 package io.github.cadiboo.optifinedeobf;
 
 import io.github.cadiboo.optifinedeobf.mapping.MappingService;
-import io.github.cadiboo.optifinedeobf.mapping.SRG2MCP;
+import io.github.cadiboo.optifinedeobf.mapping.MappingServiceType;
 import org.objectweb.asm.ClassReader;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.JScrollBar;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
@@ -51,12 +54,12 @@ public class DeobfFrame extends JFrame {
 	private final JTextField outputFileTextField;
 	private final JProgressBar progressBar;
 	private final JLabel progressLabel;
+	private final JComboBox<MappingServiceType> mappingServiceTypeJComboBox;
 	private final JCheckBox makePublicCheckbox;
 	private final JCheckBox definaliseCheckbox;
 	private final JCheckBox remapFileNamesCheckbox;
 	private final JCheckBox makeForgeDevJarCheckbox;
 
-	private MappingService mappingService = null;
 	private ClassRemapper classRemapper = null;
 
 	private DeobfFrame() throws HeadlessException {
@@ -153,6 +156,11 @@ public class DeobfFrame extends JFrame {
 		progressLabel.setHorizontalAlignment(SwingConstants.CENTER);
 		progressLabel.setPreferredSize(new Dimension(360, 50));
 
+		mappingServiceTypeJComboBox = new JComboBox<>(MappingServiceType.values());
+		mappingServiceTypeJComboBox.setName("mappingServiceTypeJComboBox");
+		mappingServiceTypeJComboBox.setBounds(0, 0, 200, 20);
+		mappingServiceTypeJComboBox.setToolTipText("The mapping service to use");
+
 		makePublicCheckbox = new JCheckBox();
 		makePublicCheckbox.setName("makePublicCheckbox");
 		makePublicCheckbox.setBounds(0, 0, 200, 20);
@@ -227,6 +235,7 @@ public class DeobfFrame extends JFrame {
 			bottomPannel.add(definaliseCheckbox, definaliseCheckbox.getName());
 			bottomPannel.add(remapFileNamesCheckbox, remapFileNamesCheckbox.getName());
 			bottomPannel.add(makeForgeDevJarCheckbox, makeForgeDevJarCheckbox.getName());
+			bottomPannel.add(mappingServiceTypeJComboBox, mappingServiceTypeJComboBox.getName());
 			bottomPannel.add(deobfButton, deobfButton.getName());
 
 			contentPanel.add(centerPannel, "Center");
@@ -300,8 +309,7 @@ public class DeobfFrame extends JFrame {
 			}
 		}
 
-		if (mappingService == null)
-			mappingService = new SRG2MCP();
+		MappingService mappingService = mappingServiceTypeJComboBox.getItemAt(mappingServiceTypeJComboBox.getSelectedIndex()).getMappingService();
 		if (classRemapper == null || (classRemapper.mappingService != mappingService || classRemapper.makePublic != makePublicCheckbox.isSelected() || classRemapper.definalise != definaliseCheckbox.isSelected()))
 			classRemapper = new ClassRemapper(mappingService, makePublicCheckbox.isSelected(), definaliseCheckbox.isSelected());
 

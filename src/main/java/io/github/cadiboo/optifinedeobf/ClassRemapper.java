@@ -9,7 +9,6 @@ import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InnerClassNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
-import org.objectweb.asm.tree.LocalVariableNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
@@ -38,111 +37,104 @@ public class ClassRemapper {
 		this.definalise = definalise;
 	}
 
-	/**
-	 * Returns null if there's an error
-	 */
 	byte[] remapClass(byte[] inputClass) {
-		try {
-			final ClassNode classNode = new ClassNode(ASM5);
-			final ClassReader classReader = new ClassReader(inputClass);
-			classReader.accept(classNode, 0);
+		final ClassNode classNode = new ClassNode(ASM5);
+		final ClassReader classReader = new ClassReader(inputClass);
+		classReader.accept(classNode, 0);
 
-			final boolean needsClassNameRemapping = mappingService.needsClassNameRemapping();
+		final boolean needsClassNameRemapping = mappingService.needsClassNameRemapping();
 
-			final String unmappedClassName = classNode.name;
+		final String unmappedClassName = classNode.name;
 
-			classNode.access = correctAccess(classNode.access);
-			classNode.name = mappingService.mapClass(classNode.name);
-			if (classNode.signature != null)
-				classNode.signature = mappingService.mapClassSignature(classNode.signature);
-			if (classNode.superName != null)
-				classNode.superName = mappingService.mapClass(classNode.superName);
-			final List<String> interfaces = classNode.interfaces;
-			for (int i = 0, interfacesSize = interfaces.size(); i < interfacesSize; ++i) {
-				interfaces.set(i, mappingService.mapClass(interfaces.get(i)));
+		classNode.access = correctAccess(classNode.access);
+		classNode.name = mappingService.mapClass(classNode.name);
+		if (classNode.signature != null)
+			classNode.signature = mappingService.mapClassSignature(classNode.signature);
+		if (classNode.superName != null)
+			classNode.superName = mappingService.mapClass(classNode.superName);
+		final List<String> interfaces = classNode.interfaces;
+		for (int i = 0, interfacesSize = interfaces.size(); i < interfacesSize; ++i) {
+			interfaces.set(i, mappingService.mapClass(interfaces.get(i)));
+		}
+		for (InnerClassNode innerClassNode : classNode.innerClasses) {
+			innerClassNode.access = correctAccess(innerClassNode.access);
+			innerClassNode.name = mappingService.mapClass(innerClassNode.name);
+			innerClassNode.outerName = classNode.name;
+			innerClassNode.innerName = innerClassNode.name.replace(classNode.name, "");
+		}
+
+		for (final FieldNode field : classNode.fields) {
+			field.access = correctAccess(field.access);
+			field.name = mappingService.mapField(unmappedClassName, field.name);
+			if (needsClassNameRemapping) {
+				field.desc = mappingService.mapFieldDescriptor(field.desc);
+				if (field.signature != null)
+					field.signature = mappingService.mapFieldSignature(field.signature);
 			}
-			for (InnerClassNode innerClassNode : classNode.innerClasses) {
-				innerClassNode.access = correctAccess(innerClassNode.access);
-				innerClassNode.name = mappingService.mapClass(innerClassNode.name);
-				innerClassNode.outerName = classNode.name;
-				innerClassNode.innerName = innerClassNode.name.replace(classNode.name, "");
-			}
+		}
 
-			for (final FieldNode field : classNode.fields) {
-				field.access = correctAccess(field.access);
-				field.name = mappingService.mapField(unmappedClassName, field.name);
-				if (needsClassNameRemapping) {
-					field.desc = mappingService.mapFieldDescriptor(field.desc);
-					if (field.signature != null)
-						field.signature = mappingService.mapFieldSignature(field.signature);
-				}
+		for (final MethodNode method : classNode.methods) {
+			if ((makePublic || definalise) && !method.name.equals("<clinit>"))
+				method.access = correctAccess(method.access);
+			method.name = mapLamdaMethod(unmappedClassName, method.name, method.desc);
+			if (needsClassNameRemapping) {
+				method.desc = mappingService.mapMethodDescriptor(method.desc);
+				if (method.signature != null)
+					method.signature = mappingService.mapMethodSignature(method.signature);
 			}
-
-			for (final MethodNode method : classNode.methods) {
-				if ((makePublic || definalise) && !method.name.equals("<clinit>"))
-					method.access = correctAccess(method.access);
-				method.name = mapLamdaMethod(unmappedClassName, method.name, method.desc);
-				if (needsClassNameRemapping) {
-					method.desc = mappingService.mapMethodDescriptor(method.desc);
-					if (method.signature != null)
-						method.signature = mappingService.mapMethodSignature(method.signature);
-				}
-				method.instructions.iterator().forEachRemaining(insn -> {
-					if (insn instanceof TypeInsnNode) {
-						TypeInsnNode typeInsn = (TypeInsnNode) insn;
-						if (needsClassNameRemapping) {
-							typeInsn.desc = mappingService.mapTypeDescriptor(typeInsn.desc);
-						}
-					} else if (insn instanceof FieldInsnNode) {
-						final FieldInsnNode fieldInsn = (FieldInsnNode) insn;
-						fieldInsn.name = mappingService.mapField(fieldInsn.owner, fieldInsn.name);
-						if (needsClassNameRemapping) {
-							fieldInsn.desc = mappingService.mapFieldDescriptor(fieldInsn.desc);
-							fieldInsn.owner = mappingService.mapClass(fieldInsn.owner);
-						}
-					} else if (insn instanceof MethodInsnNode) {
-						final MethodInsnNode methodInsn = (MethodInsnNode) insn;
-						methodInsn.name = mapLamdaMethod(methodInsn.owner, methodInsn.name, methodInsn.desc);
-						if (needsClassNameRemapping) {
-							methodInsn.desc = mappingService.mapMethodDescriptor(methodInsn.desc);
-							methodInsn.owner = mappingService.mapClass(methodInsn.owner);
-						}
-					} else if (insn instanceof InvokeDynamicInsnNode) {
-						final Object[] bsmArgs = ((InvokeDynamicInsnNode) insn).bsmArgs;
-						for (int i = 0; i < bsmArgs.length; ++i) {
-							final Object bsmArg = bsmArgs[i];
-							if (bsmArg instanceof Handle) {
-								Handle handle = (Handle) bsmArg;
-								String mappedName = mapHandleName(handle);
-								if (needsClassNameRemapping || !mappedName.equals(handle.getName()))
-									if (needsClassNameRemapping) {
-										int tag = handle.getTag();
-										if (tag < H_INVOKEVIRTUAL) // Field
-											bsmArgs[i] = new Handle(tag, mappingService.mapClass(handle.getOwner()), mappedName, mappingService.mapFieldDescriptor(handle.getDesc()), handle.isInterface());
-										else
-											bsmArgs[i] = new Handle(tag, mappingService.mapClass(handle.getOwner()), mappedName, mappingService.mapMethodDescriptor(handle.getDesc()), handle.isInterface());
-									} else
-										bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner(), mappedName, handle.getDesc(), handle.isInterface());
-							}
+			method.instructions.iterator().forEachRemaining(insn -> {
+				if (insn instanceof TypeInsnNode) {
+					TypeInsnNode typeInsn = (TypeInsnNode) insn;
+					if (needsClassNameRemapping) {
+						typeInsn.desc = mappingService.mapTypeDescriptor(typeInsn.desc);
+					}
+				} else if (insn instanceof FieldInsnNode) {
+					final FieldInsnNode fieldInsn = (FieldInsnNode) insn;
+					fieldInsn.name = mappingService.mapField(fieldInsn.owner, fieldInsn.name);
+					if (needsClassNameRemapping) {
+						fieldInsn.desc = mappingService.mapFieldDescriptor(fieldInsn.desc);
+						fieldInsn.owner = mappingService.mapClass(fieldInsn.owner);
+					}
+				} else if (insn instanceof MethodInsnNode) {
+					final MethodInsnNode methodInsn = (MethodInsnNode) insn;
+					methodInsn.name = mapLamdaMethod(methodInsn.owner, methodInsn.name, methodInsn.desc);
+					if (needsClassNameRemapping) {
+						methodInsn.desc = mappingService.mapMethodDescriptor(methodInsn.desc);
+						methodInsn.owner = mappingService.mapClass(methodInsn.owner);
+					}
+				} else if (insn instanceof InvokeDynamicInsnNode) {
+					final Object[] bsmArgs = ((InvokeDynamicInsnNode) insn).bsmArgs;
+					for (int i = 0; i < bsmArgs.length; ++i) {
+						final Object bsmArg = bsmArgs[i];
+						if (bsmArg instanceof Handle) {
+							Handle handle = (Handle) bsmArg;
+							String mappedName = mapHandleName(handle);
+							if (needsClassNameRemapping || !mappedName.equals(handle.getName()))
+								if (needsClassNameRemapping) {
+									int tag = handle.getTag();
+									if (tag < H_INVOKEVIRTUAL) // Field
+										bsmArgs[i] = new Handle(tag, mappingService.mapClass(handle.getOwner()), mappedName, mappingService.mapFieldDescriptor(handle.getDesc()), handle.isInterface());
+									else
+										bsmArgs[i] = new Handle(tag, mappingService.mapClass(handle.getOwner()), mappedName, mappingService.mapMethodDescriptor(handle.getDesc()), handle.isInterface());
+								} else
+									bsmArgs[i] = new Handle(handle.getTag(), handle.getOwner(), mappedName, handle.getDesc(), handle.isInterface());
 						}
 					}
-				});
+				}
+			});
+			if (method.localVariables != null)
 				method.localVariables.forEach(localVariableNode -> {
-					if(needsClassNameRemapping) {
+					if (needsClassNameRemapping) {
 //						localVariableNode.name = mappingService.mapParameter(localVariableNode.name);
 						localVariableNode.desc = mappingService.mapFieldDescriptor(localVariableNode.desc);
 						localVariableNode.signature = mappingService.mapFieldSignature(localVariableNode.signature);
 					}
 				});
-			}
-
-			final ClassWriter classWriter = new ClassWriter(ASM5);
-			classNode.accept(classWriter);
-			return classWriter.toByteArray();
-		} catch (Exception e) {
-			e.printStackTrace();
-			return null;
 		}
+
+		final ClassWriter classWriter = new ClassWriter(ASM5);
+		classNode.accept(classWriter);
+		return classWriter.toByteArray();
 	}
 
 	int correctAccess(int access) {

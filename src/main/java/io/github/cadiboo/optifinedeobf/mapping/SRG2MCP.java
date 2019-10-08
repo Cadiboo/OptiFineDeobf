@@ -59,4 +59,9 @@ public class SRG2MCP implements MappingService {
 		return false;
 	}
 
+	@Override
+	public boolean wantsSuperclassMap() {
+		return false;
+	}
+
 }

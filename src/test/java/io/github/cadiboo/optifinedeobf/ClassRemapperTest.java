@@ -148,6 +148,11 @@ public class ClassRemapperTest {
 			return false;
 		}
 
+		@Override
+		public boolean wantsSuperclassMap() {
+			return false;
+		}
+
 	}
 
 }

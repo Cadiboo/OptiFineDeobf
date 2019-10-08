@@ -10,10 +10,8 @@ import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
-import javax.swing.JScrollBar;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
@@ -359,7 +357,13 @@ public class DeobfFrame extends JFrame {
 					continue;
 
 				if (jarEntryName.endsWith(".class")) {
-					byte[] remappedBytes = classRemapper.remapClass(readStreamFully(jarInputStream));
+					byte[] remappedBytes;
+					try {
+						remappedBytes = classRemapper.remapClass(readStreamFully(jarInputStream));
+					} catch (Exception e) {
+						handleException(e);
+						throw e;
+					}
 					if (remappedBytes != null) {
 						if (remapFileNames) jarOutputStream.putNextEntry(new JarEntry(new ClassReader(remappedBytes).getClassName() + ".class"));
 						else jarOutputStream.putNextEntry(new JarEntry(jarEntryName));
@@ -389,6 +393,8 @@ public class DeobfFrame extends JFrame {
 
 	private int getFilesToProcess(final File inputFile, final HashSet<String> filesToIngore) throws IOException {
 		final boolean makeForgeDevJar = makeForgeDevJarCheckbox.isSelected();
+		final MappingService mappingService = mappingServiceTypeJComboBox.getItemAt(mappingServiceTypeJComboBox.getSelectedIndex()).getMappingService();
+		final boolean wantsSuperclassMap = mappingService.wantsSuperclassMap();
 
 		int filesToProcess = 0;
 		try (JarInputStream jarInputStream = new JarInputStream(new FileInputStream(inputFile), false)) {
@@ -400,11 +406,16 @@ public class DeobfFrame extends JFrame {
 					if (jarEntryName.startsWith("net/minecraftforge/") // Discard Forge dummy classes
 							|| jarEntryName.startsWith("javax/") // Discard Javax dummy class
 							|| (!jarEntryName.equals("Config.class") && jarEntryName.endsWith(".class") && !jarEntryName.contains("/")) // Discard obf named classes
-					)
+					) {
 						filesToIngore.add(jarEntryName);
-					else if (jarEntryName.startsWith("srg/")) // Mark obf-named classes with SRG counterparts as ignored so we don't try and add them to the zip twice
+						continue;
+					} else if (jarEntryName.startsWith("srg/")) { // Mark obf-named classes with SRG counterparts as ignored so we don't try and add them to the zip twice
 						filesToIngore.add(jarEntryName.substring(4));
+						continue;
+					}
 				}
+				if (jarEntryName.endsWith(".class") && wantsSuperclassMap)
+					mappingService.buildSuperclassMap(readStreamFully(jarInputStream));
 			}
 		}
 		return filesToProcess;

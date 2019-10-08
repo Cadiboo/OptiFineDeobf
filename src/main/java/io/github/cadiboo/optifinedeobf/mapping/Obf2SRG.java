@@ -1,7 +1,11 @@
 package io.github.cadiboo.optifinedeobf.mapping;
 
+import org.objectweb.asm.ClassReader;
+
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Scanner;
 
 /**
@@ -70,9 +74,37 @@ public class Obf2SRG implements MappingService {
 		TSRGClass mapped = classes.get(clazz);
 		if (mapped != null) {
 			HashMap<String, String> map = mapped.methods.get(name);
-			if (map == null)
+			if (map == null) {
+				if (mapped.superclass != null) {
+					HashMap<String, String> superMap = mapped.superclass.methods.get(name);
+					if (superMap != null) {
+						String s = superMap.get(desc);
+						if (s != null)
+							return s;
+					}
+					for (final TSRGClass anInterface : mapped.interfaces) {
+						HashMap<String, String> interfaceMap = anInterface.methods.get(name);
+						if (interfaceMap != null) {
+							String s2 = interfaceMap.get(desc);
+							if (s2 != null)
+								return s2;
+						}
+					}
+				}
 				return name;
-			return map.getOrDefault(desc, name);
+			} else {
+				String s = map.get(desc);
+				if (s != null)
+					return s;
+				for (final TSRGClass anInterface : mapped.interfaces) {
+					HashMap<String, String> interfaceMap = anInterface.methods.get(name);
+					if (interfaceMap != null) {
+						String s2 = interfaceMap.get(desc);
+						if (s2 != null) return s2;
+					}
+				}
+				return name;
+			}
 		}
 		return name;
 	}
@@ -82,6 +114,30 @@ public class Obf2SRG implements MappingService {
 		return true;
 	}
 
+	@Override
+	public boolean wantsSuperclassMap() {
+		return true;
+	}
+
+	@Override
+	public void buildSuperclassMap(byte[] clazz) {
+		ClassReader classReader = new ClassReader(clazz);
+		TSRGClass tsrgClass = classes.get(classReader.getClassName());
+		if (tsrgClass != null) {
+			String superName = classReader.getSuperName();
+			if (superName != null && !superName.equals("java/lang/Object")) {
+				TSRGClass tsrgSuperclass = classes.get(superName);
+				if (tsrgSuperclass != null)
+					tsrgClass.superclass = tsrgSuperclass;
+			}
+			for (final String anInterface : classReader.getInterfaces()) {
+				TSRGClass tsrgInterface = classes.get(anInterface);
+				if (tsrgInterface != null)
+					tsrgClass.interfaces.add(tsrgInterface);
+			}
+		}
+	}
+
 	private class TSRGClass {
 
 		private final String mappedName;
@@ -89,6 +145,9 @@ public class Obf2SRG implements MappingService {
 		private final HashMap<String, String> fields = new HashMap<>();
 		// unmapedName -> descriptor -> mappedName
 		private final HashMap<String, HashMap<String, String>> methods = new HashMap<>();
+
+		TSRGClass superclass;
+		List<TSRGClass> interfaces = new ArrayList<>(0);
 
 		private TSRGClass(final String mappedName) {
 			this.mappedName = mappedName;

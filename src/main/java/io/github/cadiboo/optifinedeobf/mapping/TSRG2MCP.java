@@ -61,4 +61,9 @@ public class TSRG2MCP implements MappingService {
 		return false;
 	}
 
+	@Override
+	public boolean wantsSuperclassMap() {
+		return false;
+	}
+
 }

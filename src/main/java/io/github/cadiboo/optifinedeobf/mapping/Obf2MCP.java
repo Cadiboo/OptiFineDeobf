@@ -36,7 +36,18 @@ public class Obf2MCP implements MappingService {
 
 	@Override
 	public boolean needsClassNameRemapping() {
-		return true;
+		return obf2SRG.needsClassNameRemapping() | srg2MCP.needsClassNameRemapping();
+	}
+
+	@Override
+	public boolean wantsSuperclassMap() {
+		return obf2SRG.wantsSuperclassMap() | srg2MCP.wantsSuperclassMap();
+	}
+
+	@Override
+	public void buildSuperclassMap(final byte[] clazz) {
+		obf2SRG.buildSuperclassMap(clazz);
+		srg2MCP.buildSuperclassMap(clazz);
 	}
 
 }

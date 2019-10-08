@@ -99,4 +99,9 @@ public interface MappingService {
 
 	boolean needsClassNameRemapping();
 
+	boolean wantsSuperclassMap();
+
+	default void buildSuperclassMap(byte[] clazz) {
+	}
+
 }

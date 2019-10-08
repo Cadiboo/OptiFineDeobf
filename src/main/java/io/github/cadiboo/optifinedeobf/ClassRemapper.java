@@ -16,7 +16,7 @@ import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_PROTECTED;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
-import static org.objectweb.asm.Opcodes.ASM5;
+import static org.objectweb.asm.Opcodes.ASM7;
 import static org.objectweb.asm.Opcodes.H_INVOKEVIRTUAL;
 
 /**
@@ -35,7 +35,7 @@ public class ClassRemapper {
 	}
 
 	byte[] remapClass(byte[] inputClass) {
-		final ClassNode classNode = new ClassNode(ASM5);
+		final ClassNode classNode = new ClassNode(ASM7);
 		final ClassReader classReader = new ClassReader(inputClass);
 		classReader.accept(classNode, 0);
 
@@ -76,7 +76,7 @@ public class ClassRemapper {
 			});
 		}
 
-		final ClassWriter classWriter = new ClassWriter(ASM5);
+		final ClassWriter classWriter = new ClassWriter(ASM7);
 		classNode.accept(classWriter);
 		return classWriter.toByteArray();
 	}

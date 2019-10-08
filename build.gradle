@@ -17,18 +17,21 @@ dependencies {
 	compile "org.ow2.asm:asm-util:7.2"
 }
 
+def commonManifest = {
+	attributes([
+			"Main-Class"              : "io.github.cadiboo.optifinedeobf.DeobfFrame",
+			"Implementation-Title"    : "OptiFineDeobf",
+			"Implementation-Version"  : "${version}",
+			"Implementation-Vendor"   : group,
+			"Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+			"Signing-Fingerprint"     : project.hasProperty('signSHA1') ? project.findProperty('signSHA1') : "unsigned",
+			'Built-With'              : 'Gradle v' + project.getGradle().getGradleVersion()
+	],)
+}
+
 jar {
-	manifest {
-		attributes([
-				"Main-Class"              : "io.github.cadiboo.optifinedeobf.DeobfFrame",
-				"Implementation-Title"    : "OptiFineDeobf",
-				"Implementation-Version"  : "${version}",
-				"Implementation-Vendor"   : group,
-				"Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-				"Signing-Fingerprint"     : project.hasProperty('signSHA1') ? project.findProperty('signSHA1') : "unsigned",
-				'Built-With'              : 'Gradle v' + project.getGradle().getGradleVersion()
-		],)
-	}
+	manifest commonManifest
+	classifier = 'bin'
 }
 
 task sourcesJar(type: Jar, dependsOn: classes) {
@@ -37,6 +40,18 @@ task sourcesJar(type: Jar, dependsOn: classes) {
 }
 build.dependsOn sourcesJar
 
+task fatJar(type: Jar, dependsOn: 'jar') {
+	inputs.file jar.archivePath
+	from(configurations.compile.collect { zipTree(it).matching { exclude 'META-INF/**' } })
+	manifest commonManifest
+	classifier = 'all'
+}
+
+fatJar.doFirst {
+	from zipTree(jar.archivePath)
+}
+
 artifacts {
 	archives sourcesJar
+	archives fatJar
 }

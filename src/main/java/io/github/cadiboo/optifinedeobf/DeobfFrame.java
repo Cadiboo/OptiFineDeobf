@@ -1,12 +1,14 @@
 package io.github.cadiboo.optifinedeobf;
 
 import io.github.cadiboo.optifinedeobf.mapping.MappingService;
-import io.github.cadiboo.optifinedeobf.mapping.MappingServiceType;
+import io.github.cadiboo.optifinedeobf.mapping.SRG2MCP;
+import io.github.cadiboo.optifinedeobf.mapping.TSRG2MCP;
+import io.github.cadiboo.optifinedeobf.util.CustomFileFilter;
+import io.github.cadiboo.optifinedeobf.util.Utils;
 import org.objectweb.asm.ClassReader;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -31,34 +33,39 @@ import java.awt.dnd.DnDConstants;
 import java.awt.dnd.DropTarget;
 import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.ItemEvent;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.jar.JarEntry;
 import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
 
 public class DeobfFrame extends JFrame {
 
+	public static final FileFilter JAVA_FILE_FILTER = new CustomFileFilter("Jar and class files", f -> f.getName().endsWith(".class") || f.getName().endsWith(".jar"));
+	public static final FileFilter MAPPINGS_FILE_FILTER = new CustomFileFilter("Mappings files", f -> f.getName().endsWith(".srg") || f.getName().endsWith(".tsrg"));
+
+	private static final int SRG_SLASH_LENGTH = "srg/".length();
+
 	private final JTextField inputFileTextField;
 	private final JTextField outputFileTextField;
 	private final JProgressBar progressBar;
 	private final JLabel progressLabel;
-	private final JComboBox<MappingServiceType> mappingServiceTypeJComboBox;
 	private final JCheckBox makePublicCheckbox;
 	private final JCheckBox definaliseCheckbox;
 	private final JCheckBox remapFileNamesCheckbox;
 	private final JCheckBox makeForgeDevJarCheckbox;
-
+	private final JTextField mappingsFileTextField;
 	private ClassRemapper classRemapper = null;
+	private MappingService mappingService = null;
 
 	private DeobfFrame() throws HeadlessException {
 
@@ -91,6 +98,7 @@ public class DeobfFrame extends JFrame {
 		inputFileLabel.setText("Input File");
 
 		final DropTarget inputDropTarget = new DropTarget() {
+			@SuppressWarnings("unchecked")
 			public synchronized void drop(DropTargetDropEvent evt) {
 				try {
 					evt.acceptDrop(DnDConstants.ACTION_COPY);
@@ -140,24 +148,58 @@ public class DeobfFrame extends JFrame {
 		outputFileButton.setText("Choose...");
 		outputFileButton.addActionListener(e -> this.chooseOutputFile());
 
+		final DropTarget mappingsDropTarget = new DropTarget() {
+			@SuppressWarnings("unchecked")
+			public synchronized void drop(DropTargetDropEvent evt) {
+				try {
+					evt.acceptDrop(DnDConstants.ACTION_COPY);
+					for (File file : (List<File>) evt.getTransferable().getTransferData(DataFlavor.javaFileListFlavor)) {
+						setMappings(file);
+					}
+					evt.dropComplete(true);
+				} catch (Exception e) {
+					handleException(e);
+				}
+			}
+		};
+
+		final JLabel mappingsFileLabel = new JLabel();
+		mappingsFileLabel.setName("mappingsFileLabel");
+		mappingsFileLabel.setBounds(15, 125, 75, 16);
+		mappingsFileLabel.setPreferredSize(new Dimension(75, 16));
+		mappingsFileLabel.setText("Mappings");
+
+		final String defaultMappings = new Random().nextBoolean() ? SRG2MCP.DEFAULT_MAPPINGS_FILE : TSRG2MCP.DEFAULT_MAPPINGS_FILE;
+
+		mappingsFileTextField = new JTextField("Default (" + defaultMappings + ")");
+		mappingsFileTextField.setName("mappingsFileTextField");
+		mappingsFileTextField.setBounds(90, 125, 210, 20);
+		mappingsFileTextField.setEditable(false);
+		mappingsFileTextField.setPreferredSize(new Dimension(210, 20));
+		mappingsFileTextField.setDropTarget(mappingsDropTarget);
+
+		final JButton mappingsFileButton = new JButton();
+		mappingsFileButton.setName("mappingsFileButton");
+		mappingsFileButton.setBounds(300, 125, 75, 20);
+		mappingsFileButton.setMargin(new Insets(2, 2, 2, 2));
+		mappingsFileButton.setPreferredSize(new Dimension(75, 20));
+		mappingsFileButton.setText("Choose...");
+		mappingsFileButton.addActionListener(e -> this.chooseMappingsFile());
+		mappingsFileButton.setDropTarget(mappingsDropTarget);
+
 		progressBar = new JProgressBar();
 		progressBar.setMinimum(0);
 		progressBar.setMaximum(1);
 		progressBar.setValue(1);
-		progressBar.setBounds(15, 145, 360, 10);
+		progressBar.setBounds(15, 150, 360, 10);
 		progressBar.setVisible(false);
 
 		progressLabel = new JLabel();
 		progressLabel.setName("progressLabel");
-		progressLabel.setBounds(15, 155, 360, 50);
+		progressLabel.setBounds(15, 165, 360, 30);
 		progressLabel.setFont(new Font("Dialog", Font.PLAIN, 12));
 		progressLabel.setHorizontalAlignment(SwingConstants.CENTER);
 		progressLabel.setPreferredSize(new Dimension(360, 50));
-
-		mappingServiceTypeJComboBox = new JComboBox<>(MappingServiceType.values());
-		mappingServiceTypeJComboBox.setName("mappingServiceTypeJComboBox");
-		mappingServiceTypeJComboBox.setBounds(0, 0, 200, 20);
-		mappingServiceTypeJComboBox.setToolTipText("The mapping service to use");
 
 		makePublicCheckbox = new JCheckBox();
 		makePublicCheckbox.setName("makePublicCheckbox");
@@ -185,6 +227,9 @@ public class DeobfFrame extends JFrame {
 		makeForgeDevJarCheckbox.addItemListener(e -> {
 			if (e.getStateChange() == ItemEvent.SELECTED) {
 				this.remapFileNamesCheckbox.setSelected(false);
+				this.remapFileNamesCheckbox.setEnabled(false);
+			} else {
+				this.remapFileNamesCheckbox.setEnabled(true);
 			}
 		});
 
@@ -195,12 +240,15 @@ public class DeobfFrame extends JFrame {
 		deobfButton.setPreferredSize(new Dimension(50, 20));
 		deobfButton.setText("Deobf");
 		deobfButton.addActionListener(e -> {
-			// TODO: Why doesn't this work?
+			// TODO: Why isn't this visible?
 			this.progressBar.setVisible(true);
 			deobfButton.setEnabled(false);
-			this.deobf();
-			this.progressBar.setVisible(false);
-			deobfButton.setEnabled(true);
+			try {
+				this.deobf();
+				this.progressBar.setVisible(false);
+			} finally {
+				deobfButton.setEnabled(true);
+			}
 		});
 
 		final JPanel centerPannel = new JPanel();
@@ -226,6 +274,9 @@ public class DeobfFrame extends JFrame {
 			centerPannel.add(outputFileLabel, outputFileLabel.getName());
 			centerPannel.add(outputFileTextField, outputFileTextField.getName());
 			centerPannel.add(outputFileButton, outputFileButton.getName());
+			centerPannel.add(mappingsFileLabel, mappingsFileLabel.getName());
+			centerPannel.add(mappingsFileTextField, mappingsFileTextField.getName());
+			centerPannel.add(mappingsFileButton, mappingsFileButton.getName());
 			centerPannel.add(progressBar, progressBar.getName());
 			centerPannel.add(progressLabel, progressLabel.getName());
 
@@ -233,7 +284,6 @@ public class DeobfFrame extends JFrame {
 			bottomPannel.add(definaliseCheckbox, definaliseCheckbox.getName());
 			bottomPannel.add(remapFileNamesCheckbox, remapFileNamesCheckbox.getName());
 			bottomPannel.add(makeForgeDevJarCheckbox, makeForgeDevJarCheckbox.getName());
-			bottomPannel.add(mappingServiceTypeJComboBox, mappingServiceTypeJComboBox.getName());
 			bottomPannel.add(deobfButton, deobfButton.getName());
 
 			contentPanel.add(centerPannel, "Center");
@@ -270,21 +320,7 @@ public class DeobfFrame extends JFrame {
 
 	}
 
-	private static byte[] readStreamFully(InputStream is) throws IOException {
-		ByteArrayOutputStream baos = new ByteArrayOutputStream(Math.max(8192, is.available()));
-		byte[] buffer = new byte[8192];
-		int read;
-		while ((read = is.read(buffer)) >= 0) {
-			baos.write(buffer, 0, read);
-		}
-		return baos.toByteArray();
-	}
-
-	public static String replaceLast(String text, String regex, String replacement) {
-		return text.replaceFirst("(?s)(.*)" + regex, "$1" + replacement);
-	}
-
-	public void handleException(final Exception e) {
+	private void handleException(final Exception e) {
 		e.printStackTrace();
 		progressLabel.setText("Error: " + e.getLocalizedMessage());
 	}
@@ -307,7 +343,7 @@ public class DeobfFrame extends JFrame {
 			}
 		}
 
-		MappingService mappingService = mappingServiceTypeJComboBox.getItemAt(mappingServiceTypeJComboBox.getSelectedIndex()).getMappingService();
+		if (mappingService == null) createMappingsService();
 		if (classRemapper == null || (classRemapper.mappingService != mappingService || classRemapper.makePublic != makePublicCheckbox.isSelected() || classRemapper.definalise != definaliseCheckbox.isSelected()))
 			classRemapper = new ClassRemapper(mappingService, makePublicCheckbox.isSelected(), definaliseCheckbox.isSelected());
 
@@ -346,6 +382,12 @@ public class DeobfFrame extends JFrame {
 				JarInputStream jarInputStream = new JarInputStream(new FileInputStream(inputFile), false);
 				JarOutputStream jarOutputStream = new JarOutputStream(new FileOutputStream(outputFile))
 		) {
+			if (makeForgeDevJar) {
+				// Inject dummy OptiFine mod class to stop loading errors in dev
+				jarOutputStream.putNextEntry(new JarEntry("optifine/OptiFineDeobfInjectedOptiFineModClass.class"));
+				jarOutputStream.write(Utils.readStreamFully(getClass().getResourceAsStream("/OptiFineDeobfInjectedOptiFineModClass.class")));
+				jarOutputStream.closeEntry();
+			}
 			JarEntry jarEntry;
 			while ((jarEntry = jarInputStream.getNextJarEntry()) != null) {
 				String jarEntryName = jarEntry.getName();
@@ -359,7 +401,7 @@ public class DeobfFrame extends JFrame {
 				if (jarEntryName.endsWith(".class")) {
 					byte[] remappedBytes;
 					try {
-						remappedBytes = classRemapper.remapClass(readStreamFully(jarInputStream));
+						remappedBytes = classRemapper.remapClass(Utils.readStreamFully(jarInputStream));
 					} catch (Exception e) {
 						handleException(e);
 						throw e;
@@ -372,14 +414,14 @@ public class DeobfFrame extends JFrame {
 
 						if (makeForgeDevJar && jarEntryName.startsWith("srg/")) {
 							// Duplicate srg named classes and overwrite their obf named counterparts
-							jarOutputStream.putNextEntry(new JarEntry(jarEntryName.substring(4)));
+							jarOutputStream.putNextEntry(new JarEntry(jarEntryName.substring(SRG_SLASH_LENGTH)));
 							jarOutputStream.write(remappedBytes);
 							jarOutputStream.closeEntry();
 						}
 					}
 				} else {
 					jarOutputStream.putNextEntry(new JarEntry(jarEntry));
-					jarOutputStream.write(readStreamFully(jarInputStream));
+					jarOutputStream.write(Utils.readStreamFully(jarInputStream));
 					jarOutputStream.closeEntry();
 				}
 			}
@@ -393,8 +435,6 @@ public class DeobfFrame extends JFrame {
 
 	private int getFilesToProcess(final File inputFile, final HashSet<String> filesToIngore) throws IOException {
 		final boolean makeForgeDevJar = makeForgeDevJarCheckbox.isSelected();
-		final MappingService mappingService = mappingServiceTypeJComboBox.getItemAt(mappingServiceTypeJComboBox.getSelectedIndex()).getMappingService();
-		final boolean wantsSuperclassMap = mappingService.wantsSuperclassMap();
 
 		int filesToProcess = 0;
 		try (JarInputStream jarInputStream = new JarInputStream(new FileInputStream(inputFile), false)) {
@@ -408,67 +448,108 @@ public class DeobfFrame extends JFrame {
 							|| (!jarEntryName.equals("Config.class") && jarEntryName.endsWith(".class") && !jarEntryName.contains("/")) // Discard obf named classes
 					) {
 						filesToIngore.add(jarEntryName);
-						continue;
 					} else if (jarEntryName.startsWith("srg/")) { // Mark obf-named classes with SRG counterparts as ignored so we don't try and add them to the zip twice
-						filesToIngore.add(jarEntryName.substring(4));
-						continue;
+						filesToIngore.add(jarEntryName.substring(SRG_SLASH_LENGTH));
 					}
 				}
-				if (jarEntryName.endsWith(".class") && wantsSuperclassMap)
-					mappingService.buildSuperclassMap(readStreamFully(jarInputStream));
 			}
 		}
 		return filesToProcess;
 	}
 
-	private JFileChooser makeInputChooser() {
+	private void createMappingsService() {
+		String mappingsText = mappingsFileTextField.getText();
+		File file = Paths.get(mappingsText).toFile();
+		if (file.exists()) {
+			setMappings(file);
+		} else if (mappingsText.startsWith("Default")) {
+			int dotIndex = mappingsText.lastIndexOf('.');
+			if (dotIndex == -1)
+				handleException(new IllegalStateException("Invalid default mappings input. What? How?"));
+			String mappingsExt = mappingsText.substring(dotIndex + 1);
+			if (mappingsExt.startsWith("srg"))
+				mappingService = new SRG2MCP();
+			else if (mappingsExt.startsWith("tsrg"))
+				mappingService = new TSRG2MCP();
+			else
+				handleException(new IllegalStateException("Invalid default mappings input. What? How?"));
+		} else {
+			handleException(new IllegalStateException("Invalid mappings input"));
+		}
+	}
+
+	private JFileChooser makeInputChooser(final FileFilter filter) {
 		File startDir = new File("~/");
 		JFileChooser chooser = new JFileChooser(startDir);
 		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
 		chooser.setAcceptAllFileFilterUsed(false);
-		FileFilter filter = new FileFilter() {
-			@Override
-			public boolean accept(final File f) {
-				String name = f.getName();
-				return name.endsWith(".class") || name.endsWith(".jar");
-			}
-
-			@Override
-			public String getDescription() {
-				return "Jar and class files";
-			}
-		};
 		chooser.setFileFilter(filter);
 		return chooser;
 	}
 
 	private void chooseInputFile() {
-		JFileChooser chooser = makeInputChooser();
+		JFileChooser chooser = makeInputChooser(JAVA_FILE_FILTER);
 		if (chooser.showOpenDialog(this) == 0) {
-			File file = chooser.getSelectedFile();
-			setInputFile(file);
+			setInputFile(chooser.getSelectedFile());
+		}
+	}
+
+	private void chooseMappingsFile() {
+		JFileChooser chooser = makeInputChooser(MAPPINGS_FILE_FILTER);
+		if (chooser.showOpenDialog(this) == 0) {
+			setMappings(chooser.getSelectedFile());
+		}
+	}
+
+	private void chooseOutputFile() {
+		JFileChooser chooser = makeInputChooser(JAVA_FILE_FILTER);
+		if (chooser.showSaveDialog(this) == 0) {
+			this.outputFileTextField.setText(chooser.getSelectedFile().getPath());
 		}
 	}
 
 	private void setInputFile(final File file) {
 		String fileName = file.getName();
-		if (fileName.endsWith(".jar"))
-			this.outputFileTextField.setText(file.getParent() + File.separator + replaceLast(fileName, ".jar", "-deobf.jar"));
-		else if (fileName.endsWith(".class"))
-			this.outputFileTextField.setText(file.getParent() + File.separator + replaceLast(fileName, ".class", "-deobf.class"));
-		else {
+		if (fileName.endsWith(".jar")) {
+			this.outputFileTextField.setText(file.getParent() + File.separator + Utils.replaceLast(fileName, ".jar", "-deobf.jar"));
+
+			this.makeForgeDevJarCheckbox.setEnabled(true);
+			this.remapFileNamesCheckbox.setEnabled(true);
+		} else if (fileName.endsWith(".class")) {
+			this.outputFileTextField.setText(file.getParent() + File.separator + Utils.replaceLast(fileName, ".class", "-deobf.class"));
+
+			this.makeForgeDevJarCheckbox.setSelected(false);
+			this.makeForgeDevJarCheckbox.setEnabled(false);
+			this.remapFileNamesCheckbox.setSelected(false);
+			this.remapFileNamesCheckbox.setEnabled(false);
+		} else {
 			handleException(new IllegalStateException("Input file is not a jar or class file! Please select a valid input file."));
 			return;
 		}
 		this.inputFileTextField.setText(file.getPath());
 	}
 
-	private void chooseOutputFile() {
-		JFileChooser chooser = makeInputChooser();
-		if (chooser.showSaveDialog(this) == 0) {
-			File file = chooser.getSelectedFile();
-			this.outputFileTextField.setText(file.getPath());
+	private void setMappings(final File file) {
+		String fileName = file.getName();
+		if (fileName.endsWith(".srg")) {
+			try {
+				this.mappingService = new SRG2MCP(new FileInputStream(file));
+			} catch (FileNotFoundException e) {
+				handleException(e);
+				return;
+			}
+		} else if (fileName.endsWith(".tsrg"))
+			try {
+				this.mappingService = new TSRG2MCP(new FileInputStream(file));
+			} catch (FileNotFoundException e) {
+				handleException(e);
+				return;
+			}
+		else {
+			handleException(new IllegalStateException("Mappings file is not a srg or tsrg file! Please select a valid mappings file."));
+			return;
 		}
+		this.mappingsFileTextField.setText(file.getPath());
 	}
 
 }

@@ -99,6 +99,25 @@ public class ClassRemapperTest {
 			mv.visitInsn(ACONST_NULL);
 			mv.visitInsn(ARETURN);
 		}
+		{
+//			private static synthetic lambda$0(java.lang.Runnable arg0) { //(Ljava/lang/Runnable;)Ljava/lang/Void;
+//				 <localVar:index=0 , name=p_213165_1_ , desc=Ljava/lang/Runnable;, sig=null, start=L1, end=L2>
+//				 L1 {
+//				     aload0
+//				     invokeinterface java/lang/Runnable.run()V
+//				 }
+//				 L3 {
+//				     aconst_null
+//				     areturn
+//				 }
+//		     }
+			MethodVisitor mv = cw.visitMethod(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, "lambda$0", "(Ljava/lang/Runnable;)Ljava/lang/Void;", null, null);
+			mv.visitCode();
+			mv.visitVarInsn(ALOAD, 0);
+			mv.visitMethodInsn(INVOKEINTERFACE, "java/lang/Runnable", "run", "()V", false);
+			mv.visitInsn(ACONST_NULL);
+			mv.visitInsn(ARETURN);
+		}
 		cw.visitEnd();
 
 		byte[] testClass = cw.toByteArray();
@@ -123,11 +142,6 @@ public class ClassRemapperTest {
 		}
 
 		@Override
-		public String mapClass(final String clazz) {
-			return clazz;
-		}
-
-		@Override
 		public String mapField(final String clazz, final String name) {
 			if (name.equals("field_1111"))
 				return "mappedField";
@@ -141,16 +155,6 @@ public class ClassRemapperTest {
 			else if (name.equals("func_213165_a"))
 				return "mappedLamdbaMethod";
 			return name;
-		}
-
-		@Override
-		public boolean needsClassNameRemapping() {
-			return false;
-		}
-
-		@Override
-		public boolean wantsSuperclassMap() {
-			return false;
 		}
 
 	}

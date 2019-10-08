@@ -1,9 +1,0 @@
-- Remap signatures
-- Tree view of the mod
-- Ability to move around files
-- Ability to edit files
-- Ability to edit byte code of files
-- Ability to see original file
-- Ability to see decompiled source of edited file byte code
-- Write list of all edits into text file in jar
-- Save jar as "${jar_name}-deobf-${edit_hash}"

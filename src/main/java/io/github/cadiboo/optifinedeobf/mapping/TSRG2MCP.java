@@ -1,5 +1,6 @@
 package io.github.cadiboo.optifinedeobf.mapping;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Scanner;
@@ -9,11 +10,13 @@ import java.util.Scanner;
  */
 public class TSRG2MCP implements MappingService {
 
+	public static final String DEFAULT_MAPPINGS_FILE = "srg_to_snapshot_20190922-1.14.3.tsrg";
+
 	private final HashMap<String, String> fields = new HashMap<>();
 	private final HashMap<String, String> methods = new HashMap<>();
 
-	public TSRG2MCP() {
-		try (Scanner scanner = new Scanner(getClass().getResourceAsStream("/srg2mcp.tsrg"), StandardCharsets.UTF_8.name())) {
+	public TSRG2MCP(final InputStream source) {
+		try (Scanner scanner = new Scanner(source, StandardCharsets.UTF_8.name())) {
 			while (scanner.hasNextLine()) {
 				final String line = scanner.nextLine();
 				if (!line.startsWith(" ") && !line.startsWith("\t")) {
@@ -35,15 +38,14 @@ public class TSRG2MCP implements MappingService {
 		}
 	}
 
+	public TSRG2MCP() {
+		this(TSRG2MCP.class.getResourceAsStream("/" + DEFAULT_MAPPINGS_FILE));
+	}
+
 	@Override
 	public void dump() {
 		this.fields.forEach((raw, mapped) -> System.out.println(raw + " -> " + mapped));
 		this.methods.forEach((raw, mapped) -> System.out.println(raw + " -> " + mapped));
-	}
-
-	@Override
-	public String mapClass(final String clazz) {
-		return clazz;
 	}
 
 	@Override
@@ -54,16 +56,6 @@ public class TSRG2MCP implements MappingService {
 	@Override
 	public String mapMethod(String clazz, String name, String desc) {
 		return methods.getOrDefault(name, name);
-	}
-
-	@Override
-	public boolean needsClassNameRemapping() {
-		return false;
-	}
-
-	@Override
-	public boolean wantsSuperclassMap() {
-		return false;
 	}
 
 }

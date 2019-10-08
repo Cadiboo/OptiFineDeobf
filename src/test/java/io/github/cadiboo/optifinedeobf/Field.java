@@ -1,14 +1,14 @@
-package io.github.cadiboo.optifinedeobf.util;
+package io.github.cadiboo.optifinedeobf;
 
 /**
  * @author Cadiboo
  */
 public class Field {
 
-	public final String owner;
-	public final String name;
+	final String owner;
+	final String name;
 
-	public Field(final String owner, final String name) {
+	Field(final String owner, final String name) {
 		this.owner = owner;
 		this.name = name;
 	}

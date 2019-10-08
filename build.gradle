@@ -36,6 +36,7 @@ jar {
 
 task sourcesJar(type: Jar, dependsOn: classes) {
 	classifier = 'sources'
+	manifest commonManifest
 	from sourceSets.main.allSource
 }
 build.dependsOn sourcesJar

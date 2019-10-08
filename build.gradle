@@ -29,6 +29,8 @@ def commonManifest = {
 	],)
 }
 
+// TODO: Jar signing
+
 jar {
 	manifest commonManifest
 	classifier = 'bin'

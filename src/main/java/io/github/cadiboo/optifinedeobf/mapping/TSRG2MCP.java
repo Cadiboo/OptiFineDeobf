@@ -1,9 +1,9 @@
 package io.github.cadiboo.optifinedeobf.mapping;
 
+import io.github.cadiboo.optifinedeobf.util.Utils;
+
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.Scanner;
 
 /**
  * @author Cadiboo
@@ -16,14 +16,13 @@ public class TSRG2MCP implements MappingService {
 	private final HashMap<String, String> methods = new HashMap<>();
 
 	public TSRG2MCP(final InputStream source) {
-		try (Scanner scanner = new Scanner(source, StandardCharsets.UTF_8.name())) {
-			while (scanner.hasNextLine()) {
-				final String line = scanner.nextLine();
-				if (!line.startsWith(" ") && !line.startsWith("\t")) {
-					// Class line
-					continue;
-				}
-				if (line.contains("(")) {
+		String[] lines = Utils.splitNewline(Utils.convertStreamToString(source));
+		for (int i = lines.length - 1; i >= 0; --i) {
+			String line = lines[i];
+			try {
+				if (!Character.isWhitespace(line.charAt(0))) {
+					// NOP, we don't care about classes for srg->mcp
+				} else if (line.contains("(")) {
 					// Method line
 					// func_176742_j ()Ljava/lang/String; getName2
 					final String[] s = line.trim().split(" ");
@@ -34,6 +33,8 @@ public class TSRG2MCP implements MappingService {
 					final String[] s = line.trim().split(" ");
 					fields.put(s[0], s[1]);
 				}
+			} catch (Exception e) {
+				throw new RuntimeException("Failed parsing TSRG on line " + i + " \"" + line + "\"", e);
 			}
 		}
 	}

@@ -10,8 +10,6 @@ import java.util.HashMap;
  */
 public class TSRG2MCP implements MappingService {
 
-	public static final String DEFAULT_MAPPINGS_FILE = "srg_to_snapshot_20190922-1.14.3.tsrg";
-
 	private final HashMap<String, String> fields = new HashMap<>();
 	private final HashMap<String, String> methods = new HashMap<>();
 
@@ -37,10 +35,6 @@ public class TSRG2MCP implements MappingService {
 				throw new RuntimeException("Failed parsing TSRG on line " + i + " \"" + line + "\"", e);
 			}
 		}
-	}
-
-	public TSRG2MCP() {
-		this(TSRG2MCP.class.getResourceAsStream("/" + DEFAULT_MAPPINGS_FILE));
 	}
 
 	@Override

@@ -46,7 +46,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
@@ -172,9 +171,7 @@ public class DeobfFrame extends JFrame {
 		mappingsFileLabel.setPreferredSize(new Dimension(75, 16));
 		mappingsFileLabel.setText("Mappings");
 
-		final String defaultMappings = new Random().nextBoolean() ? SRG2MCP.DEFAULT_MAPPINGS_FILE : TSRG2MCP.DEFAULT_MAPPINGS_FILE;
-
-		mappingsFileTextField = new JTextField("Default (" + defaultMappings + ")");
+		mappingsFileTextField = new JTextField("Choose Mappings...");
 		mappingsFileTextField.setName("mappingsFileTextField");
 		mappingsFileTextField.setBounds(90, 125, 210, 20);
 		mappingsFileTextField.setEditable(false);
@@ -502,17 +499,6 @@ public class DeobfFrame extends JFrame {
 		File file = Paths.get(mappingsText).toFile();
 		if (file.exists()) {
 			setMappings(file);
-		} else if (mappingsText.startsWith("Default")) {
-			int dotIndex = mappingsText.lastIndexOf('.');
-			if (dotIndex == -1)
-				handleException(new IllegalStateException("Invalid default mappings input. What? How?"));
-			String mappingsExt = mappingsText.substring(dotIndex + 1);
-			if (mappingsExt.startsWith("srg"))
-				mappingService = new SRG2MCP();
-			else if (mappingsExt.startsWith("tsrg"))
-				mappingService = new TSRG2MCP();
-			else
-				handleException(new IllegalStateException("Invalid default mappings input. What? How?"));
 		} else {
 			handleException(new IllegalStateException("Invalid mappings input"));
 		}

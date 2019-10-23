@@ -10,8 +10,6 @@ import java.util.HashMap;
  */
 public class SRG2MCP implements MappingService {
 
-	public static final String DEFAULT_MAPPINGS_FILE = "srg_to_snapshot_20190922-1.14.3.srg";
-
 	private final HashMap<String, String> fields = new HashMap<>();
 	private final HashMap<String, String> methods = new HashMap<>();
 
@@ -41,10 +39,6 @@ public class SRG2MCP implements MappingService {
 				throw new RuntimeException("Failed parsing SRG on line " + i + " \"" + line + "\"", e);
 			}
 		}
-	}
-
-	public SRG2MCP() {
-		this(SRG2MCP.class.getResourceAsStream("/" + DEFAULT_MAPPINGS_FILE));
 	}
 
 	@Override

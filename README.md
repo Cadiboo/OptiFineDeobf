@@ -7,13 +7,13 @@ It was made because both [simpledeobf](https://github.com/octarine-noise/simpled
 ## Usage
 #### Deobfuscating a single class file
 1) Select (Drag & Drop is supported) the input class file
-2) Optionally choose a non-default mappings file
+2) Select a mappings version or choose your own mappings file
 3) Choose your options
 4) Deobf the class file
 #### Deobfuscating an OptiFine jar
 1) Open the OptiFine installer and "extract" OptiFine
 2) Select the extracted OptiFine jar as the input for OptiFineDeobf
-3) Optionally choose a non-default mappings file
+3) Select a mappings version or choose your own mappings file
 4) Choose your options
     - `Remap file names` saves class files under their class names, rather than in their original locations. In practice it means that files in OptiFine's `srg/` folder are saved in the root directory. i.e. `srg/net/optifine/Config.class` becomes `net/optifine/Config.class` because the class file's package declaration is `net.optifine`.
     - `Forge Dev Jar` applies the following tweaks to the OptiFine jar to get it to load in a development environment:

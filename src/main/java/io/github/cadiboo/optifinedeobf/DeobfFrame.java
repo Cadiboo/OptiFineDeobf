@@ -8,29 +8,9 @@ import io.github.cadiboo.optifinedeobf.util.FixedJarInputStream;
 import io.github.cadiboo.optifinedeobf.util.Utils;
 import org.objectweb.asm.ClassReader;
 
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JFileChooser;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JProgressBar;
-import javax.swing.JTextField;
-import javax.swing.SwingConstants;
-import javax.swing.SwingWorker;
-import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
-import javax.swing.WindowConstants;
+import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
-import java.awt.BorderLayout;
-import java.awt.Cursor;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
-import java.awt.HeadlessException;
-import java.awt.Insets;
-import java.awt.Rectangle;
-import java.awt.Toolkit;
+import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.dnd.DnDConstants;
 import java.awt.dnd.DropTarget;
@@ -46,6 +26,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
@@ -504,9 +485,7 @@ public class DeobfFrame extends JFrame {
 		}
 	}
 
-	private JFileChooser makeInputChooser(final FileFilter filter) {
-		File startDir = new File("~/");
-		JFileChooser chooser = new JFileChooser(startDir);
+	private JFileChooser setFileFilter(JFileChooser chooser, final FileFilter filter) {
 		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
 		chooser.setAcceptAllFileFilterUsed(false);
 		chooser.setFileFilter(filter);
@@ -514,24 +493,40 @@ public class DeobfFrame extends JFrame {
 	}
 
 	private void chooseInputFile() {
-		JFileChooser chooser = makeInputChooser(JAVA_FILE_FILTER);
-		if (chooser.showOpenDialog(this) == 0) {
+		JFileChooser chooser = setFileFilter(new JFileChooser(), JAVA_FILE_FILTER);
+		chooser.setDialogTitle("Select jar to deobfuscate");
+		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
 			setInputFile(chooser.getSelectedFile());
-		}
 	}
 
 	private void chooseMappingsFile() {
-		JFileChooser chooser = makeInputChooser(MAPPINGS_FILE_FILTER);
-		if (chooser.showOpenDialog(this) == 0) {
-			setMappings(chooser.getSelectedFile());
+		File startDirectory = null;
+		int result = JOptionPane.showConfirmDialog(null, "Would you like to select a project folder to search for mappings files?\nClick No to select a mappings file manually.", "Select project folder", JOptionPane.YES_NO_CANCEL_OPTION);
+		if (result == JOptionPane.CANCEL_OPTION || result == JOptionPane.CLOSED_OPTION)
+			return;
+		if (result == JOptionPane.YES_OPTION) {
+			JFileChooser chooser = new JFileChooser();
+			chooser.setDialogTitle("Select project folder");
+			chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+			if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+				return;
+			File mappingsFolder = Paths.get(chooser.getSelectedFile().getPath(), "build", "fg_cache", "de", "oceanlabs", "mcp", "mcp_config").toFile();
+			if (mappingsFolder.isDirectory())
+				startDirectory = mappingsFolder;
 		}
+		JFileChooser chooser = setFileFilter(new JFileChooser(startDirectory), MAPPINGS_FILE_FILTER);
+		chooser.setDialogTitle("Select mappings file");
+		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
+			setMappings(chooser.getSelectedFile());
 	}
 
 	private void chooseOutputFile() {
-		JFileChooser chooser = makeInputChooser(JAVA_FILE_FILTER);
-		if (chooser.showSaveDialog(this) == 0) {
+		JFileChooser chooser = setFileFilter(new JFileChooser(), JAVA_FILE_FILTER);
+		chooser.setDialogTitle("Save deobfuscated jar");
+		if (!"".equals(outputFileTextField.getText()))
+			chooser.setSelectedFile(new File(outputFileTextField.getText()));
+		if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION)
 			outputFileTextField.setText(chooser.getSelectedFile().getPath());
-		}
 	}
 
 	private void setInputFile(final File file) {

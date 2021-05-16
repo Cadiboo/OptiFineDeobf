@@ -3,7 +3,7 @@ apply plugin: 'maven'
 apply plugin: 'eclipse'
 apply plugin: 'idea'
 
-version = "1.0.0"
+version = "1.0.1"
 group = "io.github.cadiboo.optifinedeobf"
 archivesBaseName = "OptiFineDeobf"
 

@@ -1,8 +1,5 @@
 package io.github.cadiboo.optifinedeobf.mapper;
 
-import io.github.cadiboo.optifinedeobf.mapper.util.MappingsClass;
-import io.github.cadiboo.optifinedeobf.mapper.util.MappingsField;
-import io.github.cadiboo.optifinedeobf.mapper.util.MappingsMethod;
 import io.github.cadiboo.optifinedeobf.util.Utils;
 import org.objectweb.asm.Type;
 
@@ -37,13 +34,13 @@ public class TSRG implements Mapper {
 		String[] lines = Utils.splitNewline(Utils.convertStreamToString(source));
 
 		// First pass - collect classes (obf -> mapped)
-		final HashMap<String, String> obf2mappedClasses = new HashMap<>();
+		final var obf2mappedClasses = new HashMap<String, String>();
 		for (int i = lines.length - 1; i >= 0; --i) {
-			String line = lines[i];
+			var line = lines[i];
 			try {
 				if (!Character.isWhitespace(line.charAt(0))) {
 					//a net/minecraft/client/renderer/Quaternion
-					final String[] split = line.split(" ");
+					var split = line.split(" ");
 					obf2mappedClasses.put(split[0], split[1]);
 				}
 			} catch (Exception e) {
@@ -54,21 +51,21 @@ public class TSRG implements Mapper {
 		// Second pass - parse everything
 		MappingsClass currentClass = null;
 		for (int i = 0; i < lines.length; ++i) {
-			String line = lines[i];
+			var line = lines[i];
 			try {
 				if (!Character.isWhitespace(line.charAt(0))) {
 					//a net/minecraft/client/renderer/Quaternion
-					final String[] split = line.split(" ");
+					var split = line.split(" ");
 					classes.add(currentClass = new MappingsClass(split[0], split[1]));
 				} else if (line.contains("(")) {
 					// Method line
 					// a ()F func_195889_a
-					final String[] split = line.trim().split(" ");
+					var split = line.trim().split(" ");
 //
-					final Type[] obfParams = Type.getArgumentTypes(split[1]);
+					var obfParams = Type.getArgumentTypes(split[1]);
 
-					StringBuilder mappedDesc = new StringBuilder("(");
-					for (Type param : obfParams)
+					var mappedDesc = new StringBuilder("(");
+					for (var param : obfParams)
 						appendMappedType(mappedDesc, param, obf2mappedClasses);
 					mappedDesc.append(")");
 
@@ -76,7 +73,7 @@ public class TSRG implements Mapper {
 				} else {
 					// Field line
 					// a field_195895_a
-					final String[] s = line.trim().split(" ");
+					var s = line.trim().split(" ");
 					currentClass.fields.add(new MappingsField(s[0], s[1], "", ""));
 				}
 			} catch (Exception e) {

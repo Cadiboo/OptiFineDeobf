@@ -1,8 +1,5 @@
 package io.github.cadiboo.optifinedeobf.mapper;
 
-import io.github.cadiboo.optifinedeobf.mapper.util.MappingsClass;
-import io.github.cadiboo.optifinedeobf.mapper.util.MappingsField;
-import io.github.cadiboo.optifinedeobf.mapper.util.MappingsMethod;
 import io.github.cadiboo.optifinedeobf.util.Utils;
 
 import java.io.InputStream;
@@ -22,18 +19,18 @@ public class SRG implements Mapper {
 		return classes;
 	}
 
-	public SRG parse(final InputStream source) {
-		String[] lines = Utils.splitNewline(Utils.convertStreamToString(source));
+	public SRG parse(InputStream source) {
+		var lines = Utils.splitNewline(Utils.convertStreamToString(source));
 
 		// First pass - collect classes (obf -> mappingsClass)
-		HashMap<String, MappingsClass> obf2mappingsClasses = new HashMap<>();
+		var obf2mappingsClasses = new HashMap<String, MappingsClass>();
 		for (int i = lines.length - 1; i >= 0; --i) {
 			String line = lines[i];
 			try {
 				if (line.startsWith("CL:")) {
 					//CL: a net/minecraft/client/renderer/Quaternion
-					final String[] split = line.split(" ");
-					final String obfName = split[1];
+					var split = line.split(" ");
+					var obfName = split[1];
 					obf2mappingsClasses.put(obfName, new MappingsClass(obfName, split[2]));
 				}
 			} catch (Exception e) {
@@ -48,30 +45,30 @@ public class SRG implements Mapper {
 					// NOP, we've already done classes
 				} else if (line.startsWith("FD:")) {
 					//FD: net/minecraft/world/storage/loot/functions/Smelt/field_186574_a net/minecraft/world/storage/loot/functions/Smelt/LOGGER
-					final String[] split = line.split(" ");
-					final String obf = split[1];
-					final String mapped = split[2];
+					var split = line.split(" ");
+					var obf = split[1];
+					var mapped = split[2];
 
-					final int obfLastSlash = obf.lastIndexOf('/');
+					var obfLastSlash = obf.lastIndexOf('/');
 
-					final String obfClass = obf.substring(0, obfLastSlash);
-					final String obfName = obf.substring(obfLastSlash + 1);
+					var obfClass = obf.substring(0, obfLastSlash);
+					var obfName = obf.substring(obfLastSlash + 1);
 
-					final String mappedName = mapped.substring(mapped.lastIndexOf('/') + 1);
+					var mappedName = mapped.substring(mapped.lastIndexOf('/') + 1);
 
 					obf2mappingsClasses.get(obfClass).fields.add(new MappingsField(obfName, mappedName, "", ""));
 				} else if (line.startsWith("MD:")) {
 					//MD: eap/a (Lcxq;)V net/minecraft/client/audio/SoundHandler/func_215289_a (net/minecraft/client/renderer/ActiveRenderInfo)
-					final String[] split = line.split(" ");
-					final String obf = split[1];
-					final String mapped = split[3];
+					var split = line.split(" ");
+					var obf = split[1];
+					var mapped = split[3];
 
-					final int obfLastSlash = obf.lastIndexOf('/');
+					var obfLastSlash = obf.lastIndexOf('/');
 
-					final String obfClass = obf.substring(0, obfLastSlash);
-					final String obfName = obf.substring(obfLastSlash + 1);
+					var obfClass = obf.substring(0, obfLastSlash);
+					var obfName = obf.substring(obfLastSlash + 1);
 
-					final String mappedName = mapped.substring(mapped.lastIndexOf('/') + 1);
+					var mappedName = mapped.substring(mapped.lastIndexOf('/') + 1);
 
 					obf2mappingsClasses.get(obfClass).methods.add(new MappingsMethod(obfName, mappedName, split[2], split[4]));
 				} else {

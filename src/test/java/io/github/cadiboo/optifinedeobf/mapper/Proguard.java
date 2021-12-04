@@ -1,8 +1,5 @@
 package io.github.cadiboo.optifinedeobf.mapper;
 
-import io.github.cadiboo.optifinedeobf.mapper.util.MappingsClass;
-import io.github.cadiboo.optifinedeobf.mapper.util.MappingsField;
-import io.github.cadiboo.optifinedeobf.mapper.util.MappingsMethod;
 import io.github.cadiboo.optifinedeobf.util.Utils;
 
 import java.io.InputStream;
@@ -118,42 +115,24 @@ public class Proguard implements Mapper {
 
 	private String getInternalName(String obj) {
 		if (obj.isEmpty()) return obj;
-		switch (obj) {
-			case "int":
-				return "I";
-			case "float":
-				return "F";
-			case "double":
-				return "D";
-			case "long":
-				return "J";
-			case "boolean":
-				return "Z";
-			case "short":
-				return "S";
-			case "byte":
-				return "B";
-			case "void":
-				return "V";
-			default:
-				return "L" + getInternalClassName(obj) + ";";
-		}
+		return switch (obj) {
+			case "int" -> "I";
+			case "float" -> "F";
+			case "double" -> "D";
+			case "long" -> "J";
+			case "boolean" -> "Z";
+			case "short" -> "S";
+			case "byte" -> "B";
+			case "void" -> "V";
+			default -> "L" + getInternalClassName(obj) + ";";
+		};
 	}
 
 	private boolean isPrimitive(String obj) {
-		switch (obj) {
-			case "int":
-			case "float":
-			case "double":
-			case "long":
-			case "boolean":
-			case "short":
-			case "byte":
-			case "void":
-				return true;
-			default:
-				return false;
-		}
+		return switch (obj) {
+			case "int", "float", "double", "long", "boolean", "short", "byte", "void" -> true;
+			default -> false;
+		};
 	}
 
 }

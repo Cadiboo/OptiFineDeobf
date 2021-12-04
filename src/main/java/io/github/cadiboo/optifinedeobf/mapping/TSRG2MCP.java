@@ -18,18 +18,26 @@ public class TSRG2MCP implements MappingService {
 		for (int i = lines.length - 1; i >= 0; --i) {
 			String line = lines[i];
 			try {
-				if (!Character.isWhitespace(line.charAt(0))) {
-					// NOP, we don't care about classes for srg->mcp
-				} else if (line.contains("(")) {
+				if (!Character.isWhitespace(line.charAt(0)))
+					continue; // We don't care about classes for srg->mcp
+
+				var stripped = line.strip();
+				if (Character.isDigit(stripped.charAt(0)))
+					continue; // We don't care about parameters
+				if (stripped.equals("static"))
+					continue; // We don't care if the method is static or not
+
+				var parts = stripped.split(" ");
+				if (line.contains("(")) {
 					// Method line
+					assert parts.length == 3;
 					// func_176742_j ()Ljava/lang/String; getName2
-					final String[] s = line.trim().split(" ");
-					methods.put(s[0], s[2]);
+					methods.put(parts[0], parts[2]);
 				} else {
 					// Field line
+					assert parts.length == 2;
 					// field_82609_l BY_INDEX
-					final String[] s = line.trim().split(" ");
-					fields.put(s[0], s[1]);
+					fields.put(parts[0], parts[1]);
 				}
 			} catch (Exception e) {
 				throw new RuntimeException("Failed parsing TSRG on line " + i + " \"" + line + "\"", e);

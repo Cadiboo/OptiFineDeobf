@@ -1,60 +1,49 @@
-apply plugin: 'java'
-apply plugin: 'maven'
-apply plugin: 'eclipse'
-apply plugin: 'idea'
+plugins {
+	id 'java'
+	id 'eclipse'
+	id 'idea'
+	// Shadow jar includes our libraries into our final jar
+	id 'com.github.johnrengelman.shadow' version '7.0.0'
+}
 
-version = "1.0.1"
-group = "io.github.cadiboo.optifinedeobf"
-archivesBaseName = "OptiFineDeobf"
+version = '1.0.2'
+group = 'io.github.cadiboo.optifinedeobf'
+archivesBaseName = 'OptiFineDeobf'
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(16)
+
+configurations.implementation.setCanBeResolved(true)
 
 repositories {
 	mavenCentral()
 }
 
 dependencies {
-	compile "org.ow2.asm:asm:7.2"
-	compile "org.ow2.asm:asm-tree:7.2"
-	compile "org.ow2.asm:asm-util:7.2"
+	implementation 'org.ow2.asm:asm:9.2'
+	implementation 'org.ow2.asm:asm-tree:9.2'
+	implementation 'org.ow2.asm:asm-util:9.2'
+	testImplementation 'junit:junit:4.13'
 }
-
-def commonManifest = {
-	attributes([
-			"Main-Class"              : "io.github.cadiboo.optifinedeobf.DeobfFrame",
-			"Implementation-Title"    : "OptiFineDeobf",
-			"Implementation-Version"  : "${version}",
-			"Implementation-Vendor"   : group,
-			"Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-			"Signing-Fingerprint"     : project.hasProperty('signSHA1') ? project.findProperty('signSHA1') : "unsigned",
-			"Built-With"              : "Gradle v" + project.getGradle().getGradleVersion()
-	],)
-}
-
-// TODO: Jar signing
 
 jar {
-	manifest commonManifest
+	manifest {
+		attributes "Main-Class": "io.github.cadiboo.optifinedeobf.DeobfFrame"
+	}
 	classifier = 'bin'
+	setArchiveClassifier('bin')
 }
 
 task sourcesJar(type: Jar, dependsOn: classes) {
 	classifier = 'sources'
-	manifest commonManifest
 	from sourceSets.main.allSource
 }
-build.dependsOn sourcesJar
 
-task fatJar(type: Jar, dependsOn: 'jar') {
-	inputs.file jar.archivePath
-	from(configurations.compile.collect { zipTree(it).matching { exclude 'META-INF/**' } })
-	manifest commonManifest
-	classifier = 'all'
-}
-
-fatJar.doFirst {
-	from zipTree(jar.archivePath)
+shadowJar {
+	classifier = ''
 }
 
 artifacts {
+	archives jar
 	archives sourcesJar
-	archives fatJar
+	archives shadowJar
 }

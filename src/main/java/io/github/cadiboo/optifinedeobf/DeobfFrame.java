@@ -28,7 +28,7 @@ import java.util.jar.JarOutputStream;
 public class DeobfFrame extends JFrame {
 
 	public static final FileFilter JAVA_FILE_FILTER = new CustomFileFilter("Jar and class files", f -> f.getName().endsWith(".class") || f.getName().endsWith(".jar"));
-	public static final FileFilter MAPPINGS_FILE_FILTER = new CustomFileFilter("Mappings files", f -> f.getName().endsWith(".srg") || f.getName().endsWith(".tsrg"));
+	public static final FileFilter MAPPINGS_FILE_FILTER = new CustomFileFilter("Mappings files", f -> f.getName().endsWith(".srg") || f.getName().endsWith(".tsrg") || f.getName().endsWith(".tsrg2"));
 
 	private static final int SRG_SLASH_LENGTH = "srg/".length();
 
@@ -544,7 +544,7 @@ public class DeobfFrame extends JFrame {
 				handleException(e);
 				return;
 			}
-		} else if (fileName.endsWith(".tsrg"))
+		} else if (fileName.endsWith(".tsrg") || fileName.endsWith(".tsrg2"))
 			try {
 				mappingService = new TSRG2MCP(new FileInputStream(file));
 			} catch (FileNotFoundException e) {

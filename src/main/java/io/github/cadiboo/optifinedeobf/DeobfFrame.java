@@ -15,14 +15,13 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.dnd.DnDConstants;
 import java.awt.dnd.DropTarget;
 import java.awt.dnd.DropTargetDropEvent;
-import java.awt.event.ItemEvent;
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.jar.JarEntry;
+import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
 
 public class DeobfFrame extends JFrame {
@@ -30,19 +29,14 @@ public class DeobfFrame extends JFrame {
 	public static final FileFilter JAVA_FILE_FILTER = new CustomFileFilter("Jar and class files", f -> f.getName().endsWith(".class") || f.getName().endsWith(".jar"));
 	public static final FileFilter MAPPINGS_FILE_FILTER = new CustomFileFilter("Mappings files", f -> f.getName().endsWith(".srg") || f.getName().endsWith(".tsrg") || f.getName().endsWith(".tsrg2"));
 
-	private static final int SRG_SLASH_LENGTH = "srg/".length();
-
 	private final JTextField inputFileTextField;
 	private final JTextField outputFileTextField;
-	private final JProgressBar progressBar;
 	private final JLabel progressTitle;
 	private final JLabel progressSubTitle;
 	private final JCheckBox makePublicCheckbox;
 	private final JCheckBox definaliseCheckbox;
-	private final JCheckBox remapFileNamesCheckbox;
 	private final JCheckBox makeForgeDevJarCheckbox;
 	private final JTextField mappingsFileTextField;
-	private ClassRemapper classRemapper = null;
 	private MappingService mappingService = null;
 
 	private DeobfFrame() throws HeadlessException {
@@ -68,26 +62,14 @@ public class DeobfFrame extends JFrame {
 		description.setPreferredSize(new Dimension(385, 42));
 		description.setText("This deobfuscator will deobfuscate (extracted) OptiFine");
 
+		var inputDropTarget = createDropTarget(this::setInputFile);
+
 		var inputFileLabel = new JLabel();
 		inputFileLabel.setName("inputFileLabel");
 		inputFileLabel.setBounds(15, 75, 60, 16);
 		inputFileLabel.setPreferredSize(new Dimension(75, 16));
 		inputFileLabel.setText("Input File");
-
-		var inputDropTarget = new DropTarget() {
-			@SuppressWarnings("unchecked")
-			public synchronized void drop(DropTargetDropEvent evt) {
-				try {
-					evt.acceptDrop(DnDConstants.ACTION_COPY);
-					for (File file : (List<File>) evt.getTransferable().getTransferData(DataFlavor.javaFileListFlavor)) {
-						setInputFile(file);
-					}
-					evt.dropComplete(true);
-				} catch (Exception e) {
-					handleException(e);
-				}
-			}
-		};
+		inputFileLabel.setDropTarget(inputDropTarget);
 
 		inputFileTextField = new JTextField();
 		inputFileTextField.setName("inputFileTextField");
@@ -102,20 +84,24 @@ public class DeobfFrame extends JFrame {
 		inputFileButton.setMargin(new Insets(2, 2, 2, 2));
 		inputFileButton.setPreferredSize(new Dimension(75, 20));
 		inputFileButton.setText("Choose...");
-		inputFileButton.addActionListener(e -> this.chooseInputFile());
+		inputFileButton.addActionListener(e -> chooseFile("Select jar to deobfuscate", this::setInputFile, new JFileChooser(), JAVA_FILE_FILTER));
 		inputFileButton.setDropTarget(inputDropTarget);
+
+		var outputDropTarget = createDropTarget(this::setOutputFile);
 
 		var outputFileLabel = new JLabel();
 		outputFileLabel.setName("outputFileLabel");
 		outputFileLabel.setBounds(15, 100, 75, 16);
 		outputFileLabel.setPreferredSize(new Dimension(75, 16));
 		outputFileLabel.setText("Output File");
+		outputFileLabel.setDropTarget(outputDropTarget);
 
 		outputFileTextField = new JTextField();
 		outputFileTextField.setName("outputFileTextField");
 		outputFileTextField.setBounds(90, 100, 210, 20);
 		outputFileTextField.setEditable(true);
 		outputFileTextField.setPreferredSize(new Dimension(210, 20));
+		outputFileTextField.setDropTarget(outputDropTarget);
 
 		var outputFileButton = new JButton();
 		outputFileButton.setName("outputFileButton");
@@ -123,28 +109,17 @@ public class DeobfFrame extends JFrame {
 		outputFileButton.setMargin(new Insets(2, 2, 2, 2));
 		outputFileButton.setPreferredSize(new Dimension(75, 20));
 		outputFileButton.setText("Choose...");
-		outputFileButton.addActionListener(e -> this.chooseOutputFile());
+		outputFileButton.addActionListener(e -> chooseFile("Select jar to deobfuscate", this::setOutputFile, new JFileChooser(), JAVA_FILE_FILTER));
+		outputFileButton.setDropTarget(outputDropTarget);
 
-		var mappingsDropTarget = new DropTarget() {
-			@SuppressWarnings("unchecked")
-			public synchronized void drop(DropTargetDropEvent evt) {
-				try {
-					evt.acceptDrop(DnDConstants.ACTION_COPY);
-					for (File file : (List<File>) evt.getTransferable().getTransferData(DataFlavor.javaFileListFlavor)) {
-						setMappings(file);
-					}
-					evt.dropComplete(true);
-				} catch (Exception e) {
-					handleException(e);
-				}
-			}
-		};
+		var mappingsDropTarget = createDropTarget(this::setMappingsFile);
 
 		var mappingsFileLabel = new JLabel();
 		mappingsFileLabel.setName("mappingsFileLabel");
 		mappingsFileLabel.setBounds(15, 125, 75, 16);
 		mappingsFileLabel.setPreferredSize(new Dimension(75, 16));
 		mappingsFileLabel.setText("Mappings");
+		mappingsFileLabel.setDropTarget(mappingsDropTarget);
 
 		mappingsFileTextField = new JTextField("Choose Mappings...");
 		mappingsFileTextField.setName("mappingsFileTextField");
@@ -161,13 +136,6 @@ public class DeobfFrame extends JFrame {
 		mappingsFileButton.setText("Choose...");
 		mappingsFileButton.addActionListener(e -> this.chooseMappingsFile());
 		mappingsFileButton.setDropTarget(mappingsDropTarget);
-
-		progressBar = new JProgressBar();
-		progressBar.setMinimum(0);
-		progressBar.setMaximum(1);
-		progressBar.setValue(1);
-		progressBar.setBounds(15, 150, 360, 10);
-		progressBar.setVisible(false);
 
 		progressTitle = new JLabel();
 		progressTitle.setName("progressTitle");
@@ -195,25 +163,11 @@ public class DeobfFrame extends JFrame {
 		definaliseCheckbox.setText("Definalise");
 		definaliseCheckbox.setToolTipText("If classes, fields and methods should have their access definalised. Similar to an access transformer");
 
-		remapFileNamesCheckbox = new JCheckBox();
-		remapFileNamesCheckbox.setName("remapFileNamesCheckbox");
-		remapFileNamesCheckbox.setBounds(0, 0, 200, 20);
-		remapFileNamesCheckbox.setText("Remap file names");
-		remapFileNamesCheckbox.setToolTipText("If class files should be saved under their remapped name");
-
 		makeForgeDevJarCheckbox = new JCheckBox();
 		makeForgeDevJarCheckbox.setName("makeForgeDevJarCheckbox");
 		makeForgeDevJarCheckbox.setBounds(0, 0, 200, 20);
 		makeForgeDevJarCheckbox.setText("Forge Dev Jar");
 		makeForgeDevJarCheckbox.setToolTipText("If OptiFine should have some tweaks applied to make it a valid for use in a Forge mod development workspace");
-		makeForgeDevJarCheckbox.addItemListener(e -> {
-			if (e.getStateChange() == ItemEvent.SELECTED) {
-				remapFileNamesCheckbox.setSelected(false);
-				remapFileNamesCheckbox.setEnabled(false);
-			} else {
-				remapFileNamesCheckbox.setEnabled(true);
-			}
-		});
 
 		var deobfButton = new JButton();
 		deobfButton.setName("deobfButton");
@@ -226,10 +180,10 @@ public class DeobfFrame extends JFrame {
 			protected Void doInBackground() {
 				deobfButton.setEnabled(false);
 				DeobfFrame.this.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-				progressBar.setVisible(true);
 				try {
 					deobf();
-					progressBar.setVisible(false);
+				} catch (Exception e) {
+					handleException(e);
 				} finally {
 					DeobfFrame.this.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
 					deobfButton.setEnabled(true);
@@ -264,13 +218,11 @@ public class DeobfFrame extends JFrame {
 			centerPanel.add(mappingsFileLabel, mappingsFileLabel.getName());
 			centerPanel.add(mappingsFileTextField, mappingsFileTextField.getName());
 			centerPanel.add(mappingsFileButton, mappingsFileButton.getName());
-			centerPanel.add(progressBar, progressBar.getName());
 			centerPanel.add(progressTitle, progressTitle.getName());
 			centerPanel.add(progressSubTitle, progressSubTitle.getName());
 
 			bottomPanel.add(makePublicCheckbox, makePublicCheckbox.getName());
 			bottomPanel.add(definaliseCheckbox, definaliseCheckbox.getName());
-			bottomPanel.add(remapFileNamesCheckbox, remapFileNamesCheckbox.getName());
 			bottomPanel.add(makeForgeDevJarCheckbox, makeForgeDevJarCheckbox.getName());
 			bottomPanel.add(deobfButton, deobfButton.getName());
 
@@ -284,211 +236,99 @@ public class DeobfFrame extends JFrame {
 
 	public static void main(String[] args) throws ClassNotFoundException, UnsupportedLookAndFeelException, InstantiationException, IllegalAccessException {
 		UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-		DeobfFrame frame = new DeobfFrame();
-		// Centre Window
-		{
-			var rect = frame.getBounds();
-			var scrDim = Toolkit.getDefaultToolkit().getScreenSize();
-			var parRect = new Rectangle(0, 0, scrDim.width, scrDim.height);
-			int newX = parRect.x + (parRect.width - rect.width) / 2;
-			int newY = parRect.y + (parRect.height - rect.height) / 2;
-			if (newX < 0)
-				newX = 0;
-			if (newY < 0)
-				newY = 0;
-			frame.setBounds(newX, newY, rect.width, rect.height);
-		}
+		var frame = new DeobfFrame();
+		centreWindow(frame);
 		frame.setVisible(true);
 	}
 
+	private static void centreWindow(DeobfFrame frame) {
+		var rect = frame.getBounds();
+		var scrDim = Toolkit.getDefaultToolkit().getScreenSize();
+		var parRect = new Rectangle(0, 0, scrDim.width, scrDim.height);
+		int newX = parRect.x + (parRect.width - rect.width) / 2;
+		int newY = parRect.y + (parRect.height - rect.height) / 2;
+		if (newX < 0)
+			newX = 0;
+		if (newY < 0)
+			newY = 0;
+		frame.setBounds(newX, newY, rect.width, rect.height);
+	}
+
 	private void handleException(Exception e) {
-		e.printStackTrace();
-		setProgressText("Error: " + e.getLocalizedMessage(), e.toString());
+		if (e instanceof UserException userException) {
+			setProgressText(userException.getMessage(), userException.subtitle);
+		} else {
+			e.printStackTrace();
+			setProgressText("Error: " + e.getLocalizedMessage(), e.toString());
+		}
 	}
 
-	private void setProgressText(String title, String subTitle) {
+	private void setProgressText(String/*?*/ title, String/*?*/ subtitle) {
 		progressTitle.setText(title);
-		progressSubTitle.setText(subTitle);
+		progressSubTitle.setText(subtitle);
 	}
 
-	private void deobf() {
-		var inputPath = Paths.get(inputFileTextField.getText());
-		var inputFile = inputPath.toFile();
-		if (!inputFile.exists()) {
-			setProgressText("Please select an input file.", "Input file does not exist.");
-			return;
-		}
-
-		var outputPath = Paths.get(outputFileTextField.getText());
-		var outputFile = outputPath.toFile();
-		if (outputFile.exists() && !outputFile.delete()) {
-			setProgressText("Failed to delete pre-existing output file.", "Either delete it manually or choose a different output path.");
-			return;
-		}
-
-		if (mappingService == null)
-			createMappingsService();
-		if (classRemapper == null || (classRemapper.mappingService != mappingService || classRemapper.makePublic != makePublicCheckbox.isSelected() || classRemapper.definalise != definaliseCheckbox.isSelected()))
-			classRemapper = new ClassRemapper(mappingService, makePublicCheckbox.isSelected(), definaliseCheckbox.isSelected());
-
-		var inputFileName = inputFile.getName();
-		setProgressText("Remapping file " + inputFileName + ".", "");
-
-		try {
-			if (inputFileName.endsWith(".jar"))
-				remapJar(inputFile, outputFile);
-			else if (inputFileName.endsWith(".class"))
-				remapClass(inputPath, outputPath);
-			else
-				setProgressText("Please select a valid input file.", "Input file is not a jar or class file.");
-			setProgressText("Remapped file " + inputFileName + ".", "Output: " + outputFile.getName() + ".");
-		} catch (Exception e) {
-			handleException(e);
-		}
-	}
-
-	private void remapClass(Path inputPath, Path outputPath) throws IOException {
-		byte[] remappedBytes = classRemapper.remapClass(Files.readAllBytes(inputPath));
-		if (remappedBytes != null)
-			Files.write(outputPath, remappedBytes);
-	}
-
-	private void remapJar(File inputFile, File outputFile) throws IOException {
-		var makeForgeDevJar = makeForgeDevJarCheckbox.isSelected();
-		var remapFileNames = remapFileNamesCheckbox.isSelected();
-
-		var filesToIngore = new HashSet<String>();
-		// Add one because we also have the "writing jar" step
-		progressBar.setMaximum(getFilesToProcess(inputFile, filesToIngore) + 1);
-		progressBar.setValue(0);
-
-		try (
-				var jarInputStream = new FixedJarInputStream(inputFile, false);
-				var jarOutputStream = new JarOutputStream(new FileOutputStream(outputFile))
-		) {
-			if (makeForgeDevJar) {
-				progressBar.setMaximum(progressBar.getMaximum() + 1);
-				progressBar.setValue(progressBar.getValue() + 1);
-				var progressText = "Injecting dummy OptiFine mod class.";
-				progressSubTitle.setText(progressText);
-				progressBar.setToolTipText(progressText);
-
-				// Inject dummy OptiFine mod class to stop loading errors in dev
-				jarOutputStream.putNextEntry(new JarEntry("optifine/OptiFineDeobfInjectedOptiFineModClass.class"));
-				jarOutputStream.write(Utils.readStreamFully(getClass().getResourceAsStream("/OptiFineDeobfInjectedOptiFineModClass.class")));
-				jarOutputStream.closeEntry();
-			}
-			JarEntry jarEntry;
-			while ((jarEntry = jarInputStream.getNextJarEntry()) != null) {
-				var jarEntryName = jarEntry.getName();
-
-				progressBar.setValue(progressBar.getValue() + 1);
-				var progressText = "Processing " + jarEntryName + ".";
-				progressSubTitle.setText(progressText);
-				progressBar.setToolTipText(progressText);
-
-				if (filesToIngore.contains(jarEntryName))
-					continue;
-
-				if (jarEntryName.endsWith(".class")) {
-					byte[] remappedBytes;
-					try {
-						remappedBytes = classRemapper.remapClass(Utils.readStreamFully(jarInputStream));
-					} catch (Exception e) {
-						handleException(e);
-						throw e;
-					}
-					if (remappedBytes != null) {
-						if (remapFileNames)
-							jarOutputStream.putNextEntry(new JarEntry(new ClassReader(remappedBytes).getClassName() + ".class"));
-						else
-							jarOutputStream.putNextEntry(new JarEntry(jarEntryName));
-						jarOutputStream.write(remappedBytes);
-						jarOutputStream.closeEntry();
-
-						if (makeForgeDevJar && jarEntryName.startsWith("srg/")) {
-							// Duplicate srg named classes and overwrite their obf named counterparts
-							jarOutputStream.putNextEntry(new JarEntry(jarEntryName.substring(SRG_SLASH_LENGTH)));
-							jarOutputStream.write(remappedBytes);
-							jarOutputStream.closeEntry();
-						}
-					}
-				} else {
-					jarOutputStream.putNextEntry(new JarEntry(jarEntry));
-					jarOutputStream.write(Utils.readStreamFully(jarInputStream));
-					jarOutputStream.closeEntry();
+	private DropTarget createDropTarget(Consumer<File> handler) {
+		return new DropTarget() {
+			@SuppressWarnings("unchecked")
+			public synchronized void drop(DropTargetDropEvent evt) {
+				try {
+					evt.acceptDrop(DnDConstants.ACTION_COPY);
+					for (var file : (List<File>) evt.getTransferable().getTransferData(DataFlavor.javaFileListFlavor))
+						handler.accept(file);
+					evt.dropComplete(true);
+				} catch (Exception e) {
+					handleException(e);
 				}
 			}
-
-			progressBar.setValue(progressBar.getValue() + 1);
-			var progressText = "Writing " + outputFile.getName() + ".";
-			progressSubTitle.setText(progressText);
-			progressBar.setToolTipText(progressText);
-			jarOutputStream.flush();
-		}
-
-		progressBar.setMaximum(1);
-		progressBar.setValue(1);
-		progressBar.setToolTipText(null);
-		progressSubTitle.setText("");
+		};
 	}
 
-	private int getFilesToProcess(File inputFile, HashSet<String> filesToIgnore) throws IOException {
-		var makeForgeDevJar = makeForgeDevJarCheckbox.isSelected();
-		var remapFileNames = remapFileNamesCheckbox.isSelected();
-
-		var progressText = "Gathering files to process.";
-		progressSubTitle.setText(progressText);
-		progressBar.setToolTipText(progressText);
-
-		int filesToProcess = 0;
-		try (var jarInputStream = new FixedJarInputStream(inputFile, false)) {
-			JarEntry jarEntry;
-			while ((jarEntry = jarInputStream.getNextJarEntry()) != null) {
-				++filesToProcess;
-				String jarEntryName = jarEntry.getName();
-				if (makeForgeDevJar && jarEntryName.startsWith("net/minecraftforge/") // Discard Forge dummy classes
-						|| jarEntryName.startsWith("javax/") // Discard Javax dummy class
-						|| (!jarEntryName.equals("Config.class") && jarEntryName.endsWith(".class") && !jarEntryName.contains("/")) // Discard obf named classes
-				) {
-					filesToIgnore.add(jarEntryName);
-				}
-				if ((makeForgeDevJar || remapFileNames) && jarEntryName.startsWith("srg/"))
-					// Mark obf-named classes with SRG counterparts as ignored so we don't try and add them to the zip twice
-					filesToIgnore.add(jarEntryName.substring(SRG_SLASH_LENGTH));
-			}
-		}
-		return filesToProcess;
-	}
-
-	private void createMappingsService() {
-		var mappingsText = mappingsFileTextField.getText();
-		var file = Paths.get(mappingsText).toFile();
-		if (file.exists())
-			setMappings(file);
-		else
-			handleException(new IllegalStateException("Invalid mappings input"));
-	}
-
-	private JFileChooser setFileFilter(JFileChooser chooser, FileFilter filter) {
+	private void chooseFile(String title, Consumer<File> handler, JFileChooser chooser, FileFilter filter) {
+		chooser.setDialogTitle(title);
 		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
 		chooser.setAcceptAllFileFilterUsed(false);
 		chooser.setFileFilter(filter);
-		return chooser;
+		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
+			handler.accept(chooser.getSelectedFile());
 	}
 
-	private void chooseInputFile() {
-		var chooser = setFileFilter(new JFileChooser(), JAVA_FILE_FILTER);
-		chooser.setDialogTitle("Select jar to deobfuscate");
-		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
-			setInputFile(chooser.getSelectedFile());
+	private void deobf() throws IOException {
+		var input = Paths.get(inputFileTextField.getText()).toFile();
+		var output = Paths.get(outputFileTextField.getText()).toFile();
+
+		var classRemapper = new ClassRemapper(mappingService, makePublicCheckbox.isSelected(), definaliseCheckbox.isSelected());
+		var fileRemapper = new FileRemapper(classRemapper, makeForgeDevJarCheckbox.isSelected());
+
+		setProgressText("Remapping %s...".formatted(input.getName()), null);
+		if (input.getName().endsWith(".class")) {
+			try (
+				var inputStream = new FileInputStream(input);
+				var outputStream = new FileOutputStream(output)
+			) {
+				fileRemapper.deobfClass(inputStream, outputStream);
+			}
+		} else if (input.getName().endsWith(".jar")) {
+			try (
+				var inputStream = new FixedJarInputStream(input, false);
+				var outputStream = new JarOutputStream(new FileOutputStream(output), inputStream.getManifest())
+			) {
+				fileRemapper.deobfJar(inputStream, outputStream, name -> progressSubTitle.setText("Processing %s...".formatted(name)));
+			} catch (Exception e) {
+				output.delete();
+				throw e;
+			}
+		} else
+			throw new IllegalStateException("Should not reach here - input file is invalid");
+		setProgressText("Remapped file %s.".formatted(input.getName()), "Output: %s.".formatted(output.getName()));
 	}
 
 	private void chooseMappingsFile() {
-		File startDirectory = null;
 		int result = JOptionPane.showConfirmDialog(null, "Would you like to select a project folder to search for mappings files?\nClick No to select a mappings file manually.", "Select project folder", JOptionPane.YES_NO_CANCEL_OPTION);
 		if (result == JOptionPane.CANCEL_OPTION || result == JOptionPane.CLOSED_OPTION)
 			return;
+
+		File startDirectory = null;
 		if (result == JOptionPane.YES_OPTION) {
 			var chooser = new JFileChooser();
 			chooser.setDialogTitle("Select project folder");
@@ -499,63 +339,111 @@ public class DeobfFrame extends JFrame {
 			if (mappingsFolder.isDirectory())
 				startDirectory = mappingsFolder;
 		}
-		var chooser = setFileFilter(new JFileChooser(startDirectory), MAPPINGS_FILE_FILTER);
-		chooser.setDialogTitle("Select mappings file");
-		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
-			setMappings(chooser.getSelectedFile());
-	}
-
-	private void chooseOutputFile() {
-		var chooser = setFileFilter(new JFileChooser(), JAVA_FILE_FILTER);
-		chooser.setDialogTitle("Save deobfuscated jar");
-		if (!"".equals(outputFileTextField.getText()))
-			chooser.setSelectedFile(new File(outputFileTextField.getText()));
-		if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION)
-			outputFileTextField.setText(chooser.getSelectedFile().getPath());
+		chooseFile("Select mappings file", this::setMappingsFile, new JFileChooser(startDirectory), MAPPINGS_FILE_FILTER);
 	}
 
 	private void setInputFile(File file) {
+		setProgressText(null, null);
 		var fileName = file.getName();
 		if (fileName.endsWith(".jar")) {
-			outputFileTextField.setText(file.getParent() + File.separator + Utils.replaceLast(fileName, ".jar", "-deobf.jar"));
-
 			makeForgeDevJarCheckbox.setEnabled(true);
-			remapFileNamesCheckbox.setEnabled(true);
+			if (!fileName.endsWith("MOD.jar"))
+				setProgressText("Warning", "Input file does not look like an extracted OptiFine jar");
 		} else if (fileName.endsWith(".class")) {
-			outputFileTextField.setText(file.getParent() + File.separator + Utils.replaceLast(fileName, ".class", "-deobf.class"));
-
 			makeForgeDevJarCheckbox.setSelected(false);
 			makeForgeDevJarCheckbox.setEnabled(false);
-			remapFileNamesCheckbox.setSelected(false);
-			remapFileNamesCheckbox.setEnabled(false);
-		} else {
-			handleException(new IllegalStateException("Input file is not a jar or class file! Please select a valid input file."));
-			return;
-		}
-		inputFileTextField.setText(file.getPath());
+		} else
+			throw new UserException("Input file is not a jar or class file!", "Please select a valid input file.");
+		var path = file.getPath();
+		if (Objects.equals(outputFileTextField.getText(), defaultOutputFilePathForInput(inputFileTextField.getText())))
+			setOutputFile(new File(defaultOutputFilePathForInput(path)));
+		inputFileTextField.setText(path);
 	}
 
-	private void setMappings(File file) {
-		var fileName = file.getName();
-		if (fileName.endsWith(".srg")) {
-			try {
-				mappingService = new SRG2MCP(new FileInputStream(file));
-			} catch (FileNotFoundException e) {
-				handleException(e);
-				return;
-			}
-		} else if (fileName.endsWith(".tsrg") || fileName.endsWith(".tsrg2"))
-			try {
-				mappingService = new TSRG2MCP(new FileInputStream(file));
-			} catch (FileNotFoundException e) {
-				handleException(e);
-				return;
-			}
-		else {
-			handleException(new IllegalStateException("Mappings file is not a srg or tsrg file! Please select a valid mappings file."));
-			return;
+	private String defaultOutputFilePathForInput(String path) {
+		return path == null ? null : Utils.replaceLast(path, "\\.", "-deobf.");
+	}
+
+	private void setOutputFile(File file) {
+		outputFileTextField.setText(file.getPath());
+	}
+
+	private void setMappingsFile(File file) {
+		try {
+			mappingService = createMappingsServiceFor(file);
+			mappingsFileTextField.setText(file.getPath());
+		} catch (Exception e) {
+			handleException(e);
 		}
-		mappingsFileTextField.setText(file.getPath());
+	}
+
+	private MappingService createMappingsServiceFor(File file) throws FileNotFoundException {
+		var fileName = file.getName();
+		if (fileName.endsWith(".srg"))
+			return new SRG2MCP(new FileInputStream(file));
+		if (fileName.endsWith(".tsrg") || fileName.endsWith(".tsrg2"))
+			return new TSRG2MCP(new FileInputStream(file));
+		throw new UserException("Mappings file is not a srg or tsrg file!", "Please select a valid mappings file.");
+	}
+
+	private static class UserException extends RuntimeException {
+		public final String subtitle;
+
+		public UserException(String title, String subtitle) {
+			super(title);
+			this.subtitle = subtitle;
+		}
+	}
+
+	record FileRemapper(
+		ClassRemapper remapper,
+		boolean forgeDevJar
+	) {
+
+		private static final String OBFUSCATED_CLASS_PREFIX = "notch/";
+		private static final String INTERMEDIARY_CLASS_PREFIX = "srg/";
+
+		public void deobfClass(
+			FileInputStream input,
+			FileOutputStream output
+		) throws IOException {
+			output.write(remapper().remapClass(input.readAllBytes()));
+			output.flush();
+		}
+
+		public void deobfJar(
+			JarInputStream input,
+			JarOutputStream output,
+			Consumer<String> currentEntry
+		) throws IOException {
+			JarEntry jarEntry;
+			while ((jarEntry = input.getNextJarEntry()) != null) {
+				var jarEntryName = jarEntry.getName();
+				currentEntry.accept(jarEntryName);
+
+				if (!jarEntryName.endsWith(".class")) {
+					output.putNextEntry(new JarEntry(jarEntry));
+					output.write(Utils.readStreamFully(input));
+					output.closeEntry();
+					continue;
+				}
+
+				if (forgeDevJar() && jarEntryName.startsWith(OBFUSCATED_CLASS_PREFIX))
+					continue;
+
+				var remapped = remapper().remapClass(Utils.readStreamFully(input));
+				// Intermediary files will have their names changed to deobfuscated names
+				// E.g. 'srg/foo/class1234' -> 'foo/SomeClass'
+				// Has the added benefit of getting rid of intermediary files automatically when making a dev jar
+				var outputName = this.forgeDevJar() ? new ClassReader(remapped).getClassName() + ".class" : jarEntryName;
+
+				output.putNextEntry(new JarEntry(outputName));
+				output.write(remapped);
+				output.closeEntry();
+			}
+			output.flush();
+		}
+
 	}
 
 }

@@ -10,7 +10,7 @@ version = '1.0.2'
 group = 'io.github.cadiboo.optifinedeobf'
 archivesBaseName = 'OptiFineDeobf'
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(16)
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 configurations.implementation.setCanBeResolved(true)
 

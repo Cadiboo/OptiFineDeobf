@@ -20,7 +20,7 @@ Download the latest release [here](https://github.com/Cadiboo/OptiFineDeobf/rele
 4) Deobf the OptiFine jar
 
 The `Forge Dev Jar` option applies the following tweaks to the OptiFine jar make it useful as a library to compile against in a forge development environment:
-  - Discards all classes in `notch/` that would otherwise cause compilation issues (obfuscated classes and stub classes)
+  - Discards all classes in `notch/` as they would otherwise cause compilation issues (obfuscated classes using `notch` names and stub classes)
   - Changes the paths of all classes in `srg/` to their proper name (e.g. `srg/foo/class1234` -> `foo/SomeClass`)
 
 Note that this only creates a library for you to compile against, this doesn't create an OptiFine that can be put in `mods/` in a dev environment. For that you'll need to use the dev tweaker ([instructions here](https://github.com/Cadiboo/NoCubes#optifine-compatibility))

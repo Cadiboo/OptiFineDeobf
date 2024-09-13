@@ -3,14 +3,22 @@ plugins {
 	id 'eclipse'
 	id 'idea'
 	// Shadow jar includes our libraries into our final jar
-	id 'com.github.johnrengelman.shadow' version '7.0.0'
+	id 'com.github.johnrengelman.shadow' version '7.1.2'
 }
 
 version = '1.0.2'
 group = 'io.github.cadiboo.optifinedeobf'
 archivesBaseName = 'OptiFineDeobf'
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+compileJava {
+	options.release = 21
+}
 
 configurations.implementation.setCanBeResolved(true)
 
@@ -19,27 +27,26 @@ repositories {
 }
 
 dependencies {
-	implementation 'org.ow2.asm:asm:9.2'
-	implementation 'org.ow2.asm:asm-tree:9.2'
-	implementation 'org.ow2.asm:asm-util:9.2'
-	testImplementation 'junit:junit:4.13'
+	implementation 'org.ow2.asm:asm:9.5'
+	implementation 'org.ow2.asm:asm-tree:9.5'
+	implementation 'org.ow2.asm:asm-util:9.5'
+	testImplementation 'junit:junit:4.13.2'
 }
 
 jar {
 	manifest {
 		attributes "Main-Class": "io.github.cadiboo.optifinedeobf.DeobfFrame"
 	}
-	classifier = 'bin'
-	setArchiveClassifier('bin')
+	archiveClassifier = 'bin'
 }
 
 task sourcesJar(type: Jar, dependsOn: classes) {
-	classifier = 'sources'
+	archiveClassifier = 'sources'
 	from sourceSets.main.allSource
 }
 
 shadowJar {
-	classifier = ''
+	archiveClassifier = ''
 }
 
 artifacts {

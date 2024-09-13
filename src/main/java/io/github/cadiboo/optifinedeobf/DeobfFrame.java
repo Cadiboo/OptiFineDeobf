@@ -287,7 +287,8 @@ public class DeobfFrame extends JFrame {
 	private void chooseFile(String title, Consumer<File> handler, JFileChooser chooser, FileFilter filter) {
 		chooser.setDialogTitle(title);
 		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-		chooser.setAcceptAllFileFilterUsed(false);
+		chooser.setAcceptAllFileFilterUsed(true);
+		chooser.addChoosableFileFilter(filter);
 		chooser.setFileFilter(filter);
 		if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
 			handler.accept(chooser.getSelectedFile());
